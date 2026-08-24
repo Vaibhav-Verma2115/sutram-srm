@@ -308,8 +308,10 @@ release it applies to.</div>
     <td>Input with max DN 10000 yields max reflectance 1.0</td></tr>
 <tr><td>FR-3</td><td>Clip reflectance to [0,1]; negative values from atmospheric correction are
     removed</td><td>No output pixel is negative</td></tr>
-<tr><td>FR-4</td><td>Mask SCL classes 0, 1, 3, 8, 9, 10 when an SCL band is supplied</td>
-    <td>Cloud-flagged pixels are excluded from processing</td></tr>
+<tr><td>FR-4</td><td>Mask SCL classes 0, 1, 3, 8, 9, 10 when an SCL band is supplied, before
+    super-resolution; record the masked fraction</td>
+    <td class="good">Verified &mdash; <code>--scl</code> masks 22.9% of a test scene to exactly 0.0;
+    <code>metrics.json</code> carries <code>cloud_fraction</code></td></tr>
 <tr><td>FR-5</td><td>Tile inputs of arbitrary size into 128&times;128 with 32&nbsp;px overlap</td>
     <td>A 1000&times;700 non-square input produces correct 4000&times;2800 output</td></tr>
 <tr><td>FR-6</td><td>Blend overlapping tiles with a Hann window</td>
@@ -868,8 +870,9 @@ affects roughly 8% of men.</li>
     resume correctness; all pass in CI</td></tr>
 <tr><td>Copernicus fetch by AOI</td><td>M1</td>
     <td>Bounding box + date range yields an analysis-ready 4-band stack</td></tr>
-<tr><td>Cloud masking wired into the CLI end to end</td><td>M1</td>
-    <td>Scene with SCL produces a masked product and a reported cloud fraction</td></tr>
+<tr><td class="good">Cloud masking wired into the CLI end to end &mdash; DONE</td><td>M1</td>
+    <td class="good">Delivered: <code>--scl</code> flag, 20&nbsp;m&rarr;10&nbsp;m resampling,
+    cloud fraction in metrics</td></tr>
 <tr><td>Reproducible environment lock</td><td>M0</td>
     <td>A clean machine reproduces the benchmark numbers from the lockfile</td></tr>
 </table>

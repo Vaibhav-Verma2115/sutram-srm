@@ -86,7 +86,9 @@ the map that says how much to trust it.</div>
 <ul>
 <li><strong>Cloud masking</strong> via the L2A Scene Classification Layer, rejecting classes
 0, 1, 3, 8, 9, 10 (no-data, saturated, cloud shadow, cloud medium/high probability, thin
-cirrus). Clouds are never super-resolved.</li>
+cirrus). Applied <em>before</em> super-resolution &mdash; a model handed a cloud synthesises
+convincing texture inside it. The 20&nbsp;m SCL band is nearest-neighbour resampled to 10&nbsp;m,
+and the masked fraction is recorded in the product metrics.</li>
 <li><strong>Reflectance scaling</strong> from int16 DN to 0–1 float (&divide;10000), clipped
 to the physical range.</li>
 <li><strong>Tiling</strong> at 128&times;128 with 32&nbsp;px overlap. Tiles are recombined with a

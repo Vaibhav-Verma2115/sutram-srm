@@ -159,14 +159,12 @@ Verified against source. Two things a generic diagram gets wrong here: tiling ha
 *inside* each branch that needs it (not as a separate stage), and the trust layer consumes
 the fidelity and generative branches specifically, not all four.
 
-The SCL cloud mask is drawn dashed because it is implemented in `preprocess/prepare.py` but
-not yet called by `run_inference.py` — SRS FR-4 is specified, not connected.
-
 ```mermaid
 flowchart TB
     A[/"S2 L2A GeoTIFF<br/>4 bands · B04 B03 B02 B08 @ 10 m"/]
+    S[/"SCL band (optional)<br/>20 m"/]
     B["read_bands + to_reflectance<br/>÷10000, clip 0-1"]
-    SCL["SCL cloud mask<br/>(implemented, NOT yet wired)"]
+    SCL["apply_cloud_mask<br/>classes 0,1,3,8,9,10<br/>nearest-neighbour to 10 m"]
 
     subgraph BR["Branches — each tiles internally"]
         E1["Bicubic<br/>whole-array interpolate"]
@@ -181,23 +179,22 @@ flowchart TB
     H["confidence [0,1]<br/>+ sigma"]
     I[/"6-band COG @ 2.5 m<br/>4 SR + sigma + confidence"/]
     J["check_footprint()<br/>drift = 0.00 m"]
-    M[/"metrics.json"/]
+    M[/"metrics.json<br/>+ cloud_fraction"/]
 
-    A --> B --> P
-    B -.->|"FR-4, not connected"| SCL
+    A --> B --> SCL --> P
+    S --> SCL
     P --> E1 & E2 & E4 & E3
     E2 -->|"fidelity"| G
     E3 -->|"sigma + sr"| G
     E1 & E2 & E3 & E4 --> C
     G --> H --> I --> J --> M
     C --> M
+    SCL --> M
 
     classDef io fill:#e6f2e9,stroke:#1d7a3e
     classDef trust fill:#fdf6ec,stroke:#96650d
-    classDef gap fill:#fbeaea,stroke:#b3341f,stroke-dasharray:4 3
-    class A,I,M io
+    class A,S,I,M io
     class G,H trust
-    class SCL gap
 ```
 
 ---

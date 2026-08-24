@@ -27,6 +27,44 @@ def cloud_fraction(scl: np.ndarray) -> float:
     return float(1.0 - scl_mask(scl).mean())
 
 
+def apply_cloud_mask(
+    arr: np.ndarray,
+    scl: np.ndarray,
+    fill: float = 0.0,
+    invalid: tuple[int, ...] = SCL_INVALID,
+) -> tuple[np.ndarray, dict]:
+    """Zero out cloud/shadow/cirrus pixels before super-resolution.
+
+    Masking must happen *before* the model runs, not after. A super-resolution
+    model handed a cloud will happily synthesise convincing high-frequency
+    texture inside it -- structure that looks like ground but corresponds to
+    nothing observable. Masking afterwards would leave that texture in every
+    intermediate the trust layer measures.
+
+    The SCL band is resampled by nearest-neighbour if it is at 20 m while the
+    imagery is at 10 m, which is the usual L2A layout.
+
+    Returns the masked array and a report suitable for the metrics JSON.
+    """
+    if scl.ndim == 3:
+        scl = scl[0]
+
+    if scl.shape != arr.shape[1:]:
+        ys = np.linspace(0, scl.shape[0] - 1, arr.shape[1]).round().astype(int)
+        xs = np.linspace(0, scl.shape[1] - 1, arr.shape[2]).round().astype(int)
+        scl = scl[np.ix_(ys, xs)]
+
+    valid = scl_mask(scl, invalid)
+    out = arr.copy()
+    out[:, ~valid] = fill
+    return out, {
+        "cloud_masked": True,
+        "cloud_fraction": float(1.0 - valid.mean()),
+        "valid_fraction": float(valid.mean()),
+        "scl_classes_masked": list(invalid),
+    }
+
+
 def tile_positions(height: int, width: int, tile: int = 128, overlap: int = 32):
     """Top-left (row, col) positions covering the image with `overlap` px stride.
 

@@ -17,6 +17,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 from srm.io.raster import check_footprint, read_bands, to_reflectance  # noqa: E402
+from srm.preprocess.prepare import apply_cloud_mask  # noqa: E402
 from srm.models.bicubic_branch import BicubicBranch  # noqa: E402
 from srm.models.sen2sr_branch import Sen2SRBranch  # noqa: E402
 from srm.pipeline import run, write_metrics, write_product  # noqa: E402
@@ -49,6 +50,9 @@ def main() -> int:
     ap.add_argument("--scale", type=int, default=4)
     ap.add_argument("--reflectance", action="store_true",
                     help="input is integer L2A DN and must be divided by 10000")
+    ap.add_argument("--scl", default="",
+                    help="path to the L2A Scene Classification band; cloud/shadow/cirrus "
+                         "pixels are masked before super-resolution (SRS FR-4)")
     ap.add_argument("--n-samples", type=int, default=8, help="LDSR stochastic samples")
     ap.add_argument("--steps", type=int, default=100, help="LDSR diffusion steps")
     args = ap.parse_args()
@@ -57,6 +61,18 @@ def main() -> int:
     if args.reflectance:
         arr = to_reflectance(arr)
     print(f"input {arr.shape} {profile['crs']} res={profile['transform'].a:g}m")
+
+    # Cloud masking must precede super-resolution: a model handed a cloud will
+    # synthesise convincing texture inside it (BR-4).
+    cloud = {"cloud_masked": False}
+    if args.scl:
+        scl, _ = read_bands(args.scl)
+        arr, cloud = apply_cloud_mask(arr, scl)
+        print(f"cloud mask: {cloud['cloud_fraction']:.1%} of scene masked "
+              f"(SCL classes {cloud['scl_classes_masked']})")
+        if cloud["valid_fraction"] < 0.05:
+            print("warning: scene is almost entirely cloud; output will be mostly empty",
+                  file=sys.stderr)
 
     names = [n.strip().lower() for n in args.branches.split(",")]
     branches = build_branches(names, args.device, args.n_samples, args.steps)
@@ -74,6 +90,7 @@ def main() -> int:
     fp = check_footprint(args.input, info["path"])
     payload = json.loads(mpath.read_text())
     payload["footprint"] = fp
+    payload["preprocessing"] = cloud
     mpath.write_text(json.dumps(payload, indent=2))
 
     print(f"\nwrote {info['path']}  bands={info['bands']}")
@@ -83,6 +100,8 @@ def main() -> int:
               f"LR-consistency MAE {c['consistency_mae']:.5f}  SAM {c['consistency_sam_deg']:.3f}deg")
     t = result["trust"]["confidence"]
     print(f"  confidence mean {t.mean():.3f}  low-confidence area {float((t<0.5).mean()):.2%}")
+    if cloud["cloud_masked"]:
+        print(f"  cloud-masked {cloud['cloud_fraction']:.1%} of input")
     print(f"  footprint preserved: {fp['ok']}  (max drift {fp['max_bound_drift_m']:.2e} m, "
           f"res {fp['src_res'][0]:g}m -> {fp['dst_res'][0]:g}m)")
     return 0

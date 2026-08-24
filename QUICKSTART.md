@@ -50,6 +50,7 @@ Writes `my_result.tif` (6 bands: 4 super-resolved + sigma + confidence) and
 | `--branches` | any of `bicubic,sen2sr,ldsr,ours` (comma separated) |
 | `--device` | `cpu`, `mps` (Apple GPU), or `cuda` |
 | `--reflectance` | add this if your input is raw L2A integers, not 0–1 floats |
+| `--scl` | path to the L2A Scene Classification band; masks cloud/shadow/cirrus **before** super-resolution |
 | `--n-samples` | LDSR only: how many diffusion samples for the sigma map (default 8) |
 
 **Note on `ldsr`:** it is slow (~100 s per tile on CPU). Fine for generating demo
@@ -57,6 +58,17 @@ products in advance, not for live use.
 
 **On your own Sentinel-2 data:** the input must be a GeoTIFF with four bands in
 the order **B04, B03, B02, B08** (red, green, blue, NIR).
+
+**Always pass `--scl` if you have the Scene Classification band.** Without it,
+clouds get super-resolved into convincing texture that looks like ground:
+
+```bash
+.venv/bin/python scripts/run_inference.py \
+    --input scene.tif --scl scene_SCL.tif --out out/scene_sr
+```
+
+The SCL band is usually 20 m while the imagery is 10 m; it is resampled
+automatically. The masked fraction is reported and written to `metrics.json`.
 
 ---
 
