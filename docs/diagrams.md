@@ -153,37 +153,51 @@ classDiagram
 
 ---
 
-## 3. Data flow (inference)
+## 3. Data flow (inference) — as actually implemented
+
+Verified against source. Two things a generic diagram gets wrong here: tiling happens
+*inside* each branch that needs it (not as a separate stage), and the trust layer consumes
+the fidelity and generative branches specifically, not all four.
+
+The SCL cloud mask is drawn dashed because it is implemented in `preprocess/prepare.py` but
+not yet called by `run_inference.py` — SRS FR-4 is specified, not connected.
 
 ```mermaid
-flowchart LR
-    A[/"S2 L2A GeoTIFF<br/>4 bands @ 10 m"/]
-    B["SCL cloud mask<br/>classes 0,1,3,8,9,10"]
-    C["Scale to reflectance<br/>÷10000, clip 0-1"]
-    D["Tile 128×128<br/>32 px overlap"]
+flowchart TB
+    A[/"S2 L2A GeoTIFF<br/>4 bands · B04 B03 B02 B08 @ 10 m"/]
+    B["read_bands + to_reflectance<br/>÷10000, clip 0-1"]
+    SCL["SCL cloud mask<br/>(implemented, NOT yet wired)"]
 
-    E1["Bicubic"]
-    E2["SEN2SR<br/>hard constraint"]
-    E3["LDSR-S2<br/>N samples"]
-    E4["Ours"]
+    subgraph BR["Branches — each tiles internally"]
+        E1["Bicubic<br/>whole-array interpolate"]
+        E2["SEN2SR<br/>tiled_predict 128px + Hann"]
+        E4["Ours<br/>tiled_predict 128px + Hann"]
+        E3["LDSR-S2<br/>N stochastic samples"]
+    end
 
-    F["Hann-feathered<br/>reassembly"]
-    G{"Trust layer"}
-    H["Confidence map<br/>[0,1]"]
-    I[/"6-band COG @ 2.5 m"/]
-    J["Footprint check<br/>drift = 0.00 m"]
+    P["pipeline.run()"]
+    G{{"confidence_map()<br/>fidelity.sr + generative.sr/sigma"}}
+    C["consistency_check()<br/>per branch, vs input"]
+    H["confidence [0,1]<br/>+ sigma"]
+    I[/"6-band COG @ 2.5 m<br/>4 SR + sigma + confidence"/]
+    J["check_footprint()<br/>drift = 0.00 m"]
+    M[/"metrics.json"/]
 
-    A --> B --> C --> D
-    D --> E1 & E2 & E3 & E4
-    E1 & E2 & E3 & E4 --> F --> G
-    E3 -. "sigma" .-> G
-    G --> H --> I
-    I --> J
+    A --> B --> P
+    B -.->|"FR-4, not connected"| SCL
+    P --> E1 & E2 & E4 & E3
+    E2 -->|"fidelity"| G
+    E3 -->|"sigma + sr"| G
+    E1 & E2 & E3 & E4 --> C
+    G --> H --> I --> J --> M
+    C --> M
 
     classDef io fill:#e6f2e9,stroke:#1d7a3e
     classDef trust fill:#fdf6ec,stroke:#96650d
-    class A,I io
+    classDef gap fill:#fbeaea,stroke:#b3341f,stroke-dasharray:4 3
+    class A,I,M io
     class G,H trust
+    class SCL gap
 ```
 
 ---
