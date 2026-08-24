@@ -18,7 +18,36 @@ The examples below use the prefix form so they work in a fresh terminal.
 
 ---
 
-## 1. See the demo (start here)
+## 1. Two apps — pick the right one
+
+| App | Purpose | Runs models? |
+|-----|---------|--------------|
+| `app/demo.py` | **Presentation.** Reads precomputed files only, so it cannot fail live. | No |
+| `app/testbench.py` | **Testing.** Loads weights and runs inference interactively. | Yes |
+
+```bash
+.venv/bin/python -m streamlit run app/testbench.py   # test the model
+.venv/bin/python -m streamlit run app/demo.py        # show the result
+```
+
+### Test bench
+
+Pick a scene (or upload one) → optionally add an SCL band → crop → choose branches
+and device → **Run inference**. Five tabs:
+
+- **Comparison** — input vs every branch side by side, with timings
+- **Trust layer** — confidence map, adjustable flag threshold, individual signals
+- **Metrics** — reference metrics and LR-consistency, both live
+- **NDVI** — per-branch NDVI shift
+- **Export** — write a 6-band COG with footprint verification
+
+Turn on **Wald protocol** to get real PSNR/SSIM: it degrades the loaded scene ×4
+and super-resolves it back, so the original acts as ground truth. Without it,
+only LR-consistency is meaningful — there is nothing to compare against.
+
+---
+
+## 2. See the demo
 
 ```bash
 .venv/bin/python -m streamlit run app/demo.py
@@ -33,7 +62,7 @@ Stop it with `Ctrl+C`.
 
 ---
 
-## 2. Super-resolve an image
+## 3. Super-resolve an image
 
 ```bash
 .venv/bin/python scripts/run_inference.py \
@@ -72,7 +101,7 @@ automatically. The masked fraction is reported and written to `metrics.json`.
 
 ---
 
-## 3. Benchmark the models
+## 4. Benchmark the models
 
 ```bash
 .venv/bin/python scripts/evaluate.py \
@@ -89,7 +118,7 @@ metrics without owning 2.5 m ground truth.
 
 ---
 
-## 4. Train our own model
+## 5. Train our own model
 
 Three steps. Step 1 is a large download and only needs doing once.
 
@@ -128,7 +157,7 @@ GitHub first, then set `REPO_URL` in cell 3.
 
 ---
 
-## 5. Regenerate the PDF documentation
+## 6. Regenerate the PDF documentation
 
 ```bash
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
@@ -160,6 +189,6 @@ Start with a small crop (~2000×2000 px). A full tile is 10980² and will be slo
 | `command not found: python` | Use `.venv/bin/python`, not `python` |
 | `ModuleNotFoundError: srm` | Run from the project root, not from `scripts/` |
 | `No such file: checkpoints/best.pt` | Train first (step 4), or drop `ours` from `--branches` |
-| Streamlit shows "No products found" | Run step 2 first to create something in `data/outputs/` |
+| demo.py shows "No products found" | Run step 3 first to create something in `data/outputs/` |
 | Shape mismatch in SEN2SR | Input bands must be exactly 4, in B04/B03/B02/B08 order |
 | Download died partway | Just re-run the same command — it resumes |
