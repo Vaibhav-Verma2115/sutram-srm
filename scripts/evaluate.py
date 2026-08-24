@@ -58,6 +58,9 @@ def main() -> int:
     if "sen2sr" in names:
         from srm.models.sen2sr_branch import Sen2SRBranch
         branches["SEN2SR"] = Sen2SRBranch(device=args.device)
+    if "ours" in names:
+        from srm.models.ours_branch import OursBranch
+        branches["Ours"] = OursBranch(device=args.device)
     if "ldsr" in names:
         from srm.models.ldsr_branch import LdsrBranch
         branches["LDSR-S2"] = LdsrBranch(device=args.device, n_samples=args.n_samples,

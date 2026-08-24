@@ -57,6 +57,59 @@ and measuring actual error against ground truth:
 Error falls monotonically as confidence rises (corr = −0.38): the map genuinely predicts
 where the model is wrong.
 
+## Training our own model (Phase B)
+
+Branch 4 is trained on [SEN2VENuS](https://zenodo.org/records/14603764) v2.0.0 — real
+Sentinel-2 / VENuS pairs acquired the same day and pre-registered. Same-day pairing matters:
+Puri & Kotze (2022) traced invented objects in their SRGAN outputs to a 25–30 day gap
+between LR and HR acquisition, which teaches the model to reconstruct *change* as if it were
+detail.
+
+The subset is chosen deliberately. **KUDALIAR (Telangana, India; 7269 patches)** puts real
+Indian terrain in the training set; ANJI, MAD-AMBO, SUDOUE-4 and ESTUAMAR add biome
+diversity so the model does not overfit to one landscape.
+
+### The scale subtlety
+
+SEN2VENuS pairs 10 m Sentinel-2 against 5 m VENuS — that is **×2**, while our deployment
+target is **×4** (10 m → 2.5 m). No open 2.5 m global reference exists, so we train the ×4
+operator where real ground truth does:
+
+| mode | input | target | scale |
+|------|-------|--------|-------|
+| `--scale 2` | real S2 10 m | real VENuS 5 m | ×2, fully real |
+| `--scale 4` | S2 degraded to 20 m | real VENuS 5 m | ×4, **real HR target** |
+
+In ×4 mode only the *input* is synthetic, and it is degraded with the Sentinel-2 PSF rather
+than bicubic — a model trained to invert bicubic learns the wrong operator. This is Wald's
+protocol applied to training instead of evaluation, and it is what makes a ×4 claim
+defensible without owning 2.5 m imagery.
+
+### Objective
+
+Not the standard ESRGAN recipe. VGG-19 perceptual loss is trained on 8-bit photographs and
+mismatched to 16-bit reflectance, and plain adversarial training cost Puri & Kotze ~0.2 SSIM
+in artefacts. We optimise what the problem statement actually asks for:
+
+| term | weight | purpose |
+|------|--------|---------|
+| L1 on reflectance | 1.0 | radiometric accuracy |
+| **LR-consistency through the PSF** | 0.5 | do not invent radiometry |
+| spectral angle | 0.1 | spectral consistency |
+| gradient | 0.1 | sharpness without a photographic prior |
+
+The LR-consistency term is the differentiable form of the check the trust layer runs at
+inference — the model is penalised *during training* for exactly what we flag at deployment.
+
+```bash
+python scripts/fetch_sen2venus.py --sites KUDALIAR       # 7.88 GB, resumable
+python scripts/build_dataset.py --sites KUDALIAR --scale 4
+python scripts/train.py --data data/interim/sen2venus_x4 --epochs 40 --amp
+```
+
+`notebooks/train_colab.ipynb` runs all of this on a free T4, checkpointing to Drive every
+epoch so a disconnect costs at most one epoch.
+
 ## Setup
 
 ```bash

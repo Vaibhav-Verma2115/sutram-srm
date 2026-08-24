@@ -28,6 +28,10 @@ def build_branches(names: list[str], device: str, n_samples: int, steps: int) ->
         branches["bicubic"] = BicubicBranch()
     if "sen2sr" in names:
         branches["SEN2SR"] = Sen2SRBranch(device=device)
+    if "ours" in names:
+        from srm.models.ours_branch import OursBranch
+
+        branches["Ours"] = OursBranch(device=device)
     if "ldsr" in names:
         from srm.models.ldsr_branch import LdsrBranch
 
