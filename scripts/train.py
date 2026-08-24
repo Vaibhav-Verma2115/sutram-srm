@@ -68,6 +68,9 @@ def main() -> int:
     ap.add_argument("--device", default="auto")
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--scratch", action="store_true", help="skip pretrained warm start")
+    ap.add_argument("--arch", default="lite", choices=["lite", "wide"],
+                    help="lite = released SEN2SRLite shape (full warm start); "
+                         "wide = 48ch/10blk (partial warm start)")
     ap.add_argument("--resume", default="")
     ap.add_argument("--val-batches", type=int, default=20)
     ap.add_argument("--amp", action="store_true", help="mixed precision (CUDA only)")
@@ -87,7 +90,8 @@ def main() -> int:
                           num_workers=0, drop_last=True)
     val_dl = DataLoader(val_ds, batch_size=args.batch_size, num_workers=0)
 
-    model = build_model(scale=scale, train_mode=True).to(device)
+    overrides = {"feature_channels": 48, "num_blocks": 10} if args.arch == "wide" else {}
+    model = build_model(scale=scale, train_mode=True, **overrides).to(device)
     if not args.scratch:
         try:
             report = load_pretrained_weights(model)

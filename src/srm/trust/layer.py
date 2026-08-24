@@ -77,10 +77,18 @@ def sam_consistency(sr: np.ndarray, lr: np.ndarray, scale: int = 4) -> np.ndarra
 
 
 def ndvi(arr: np.ndarray, red_idx: int = 0, nir_idx: int = 3) -> np.ndarray:
-    """NDVI from a B04/B03/B02/B08-ordered stack."""
-    red = arr[red_idx].astype(np.float32)
-    nir = arr[nir_idx].astype(np.float32)
-    return ((nir - red) / np.maximum(nir + red, 1e-8)).astype(np.float32)
+    """NDVI from a B04/B03/B02/B08-ordered stack.
+
+    Inputs are clamped at 0 first: SR products can carry slightly negative
+    reflectance (the hard constraint acts after the model's clamp), and a
+    negative nir+red falls below the epsilon denominator, exploding the ratio
+    to ~1e5 instead of staying in [-1, 1]. Found via a change-detection run
+    whose mean |dNDVI| came out at 1.15 -- physically impossible.
+    """
+    red = np.clip(arr[red_idx].astype(np.float32), 0.0, None)
+    nir = np.clip(arr[nir_idx].astype(np.float32), 0.0, None)
+    out = (nir - red) / np.maximum(nir + red, 1e-6)
+    return np.clip(out, -1.0, 1.0).astype(np.float32)
 
 
 def delta_ndvi(sr: np.ndarray, lr: np.ndarray, scale: int = 4) -> np.ndarray:
