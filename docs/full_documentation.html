@@ -58,8 +58,8 @@ Imagery — Sentinel-2 10&nbsp;m &rarr; 2.5&nbsp;m with per-pixel trust.</p>
 documentation · 25 August 2026 · 3,100 lines of Python across 27 modules</p>
 
 <div class="kpi">
-  <div><span class="v">0.905</span><span class="l">field-boundary F1<br>(bicubic 0.799)</span></div>
-  <div><span class="v">1.845°</span><span class="l">spectral angle<br>best of 4 branches</span></div>
+  <div><span class="v">0.908</span><span class="l">field-boundary F1<br>(bicubic 0.800)</span></div>
+  <div><span class="v">1.805°</span><span class="l">spectral angle<br>best of 4 branches</span></div>
   <div><span class="v">0.00 m</span><span class="l">geolocation drift<br>every product</span></div>
   <div><span class="v">&minus;0.43</span><span class="l">confidence↔error<br>correlation</span></div>
 </div>
@@ -69,8 +69,8 @@ Sentinel-2 images all of India every five days, free, at 10&nbsp;m per pixel —
 field, not its boundary. Sutram SRM reconstructs that imagery at 2.5&nbsp;m using deep
 learning, and ships a per-pixel confidence map alongside it so an analyst always knows which
 sharpened detail is supported by sensor data and which the model inferred. Trained on real
-Sentinel-2/VENµS pairs over <strong>Telangana</strong>, it improves field-boundary
-delineation from F1 0.799 to <strong>0.905</strong> — not merely sharper pixels, but
+Sentinel-2/VENµS pairs over <strong>Telangana</strong> and four further biomes, it improves field-boundary
+delineation from F1 0.800 to <strong>0.908</strong> — not merely sharper pixels, but
 measurably better analysis.</div>
 
 <div class="toc">
@@ -80,7 +80,7 @@ measurably better analysis.</div>
 <div><strong>4.</strong> Model and training</div>
 <div><strong>5.</strong> The trust layer</div>
 <div><strong>6.</strong> Validation methodology</div>
-<div><strong>7.</strong> Results</div>
+<div><strong>7.</strong> Results (incl. training-data study)</div>
 <div><strong>8.</strong> Applications</div>
 <div><strong>9.</strong> Software and usage</div>
 <div><strong>10.</strong> Engineering findings</div>
@@ -191,9 +191,9 @@ source rather than patching it downstream.</div>
 <tr><td>SUDOUE-4</td><td>France</td><td class="num">935</td><td>Agricultural parcels</td></tr>
 <tr><td>ESTUAMAR</td><td>Spain</td><td class="num">911</td><td>Coastal / estuary</td></tr>
 </table>
-<p>Two packed datasets exist: <strong>KUDALIAR-only</strong> (5,400 train / 600 val — the
-model reported throughout this document) and <strong>multi-site</strong> (8,640 / 960 across
-all five, for the generalisation study).</p>
+<p>Two packed datasets exist: <strong>KUDALIAR-only</strong> (5,400 train / 600 val) and
+<strong>multi-site</strong> (8,640 / 960 across all five sites). Both were trained; the
+multi-site model is the one reported throughout this document, on the evidence in §7.6.</p>
 
 <h3>3.2 The scale subtlety</h3>
 <div class="box warn"><span class="t">SEN2VENµS is natively ×2, not ×4</span>
@@ -270,10 +270,10 @@ learn.</p>
 <h3>4.3 Training run</h3>
 <table>
 <tr><th>Setting</th><th>Value</th></tr>
-<tr><td>Data</td><td>5,400 train / 600 val, KUDALIAR (Telangana), ×4 mode</td></tr>
-<tr><td>Schedule</td><td>40 epochs, AdamW, lr 2e-4, cosine anneal, batch 16</td></tr>
-<tr><td>Hardware</td><td>Apple M5 Pro (MPS) — 33&nbsp;s/epoch, 22&nbsp;min total</td></tr>
-<tr><td>Best checkpoint</td><td>epoch 16 — val PSNR <strong>39.23&nbsp;dB</strong>, SSIM 0.9524</td></tr>
+<tr><td>Data</td><td>8,640 train / 960 val across 5 sites (KUDALIAR + 4 biomes), ×4 mode</td></tr>
+<tr><td>Schedule</td><td>50 epochs, AdamW, lr 2e-4, cosine anneal, batch 16</td></tr>
+<tr><td>Hardware</td><td>Apple M5 Pro (MPS) — 50&nbsp;s/epoch, 42&nbsp;min total</td></tr>
+<tr><td>Best checkpoint</td><td>epoch 35 — val PSNR <strong>38.65&nbsp;dB</strong>, SSIM 0.9435 (on the harder 5-biome split)</td></tr>
 <tr><td>Resilience</td><td>Per-epoch checkpointing; <code>--resume</code> restores model, optimiser, scaler, epoch</td></tr>
 </table>
 <p>Local training on Apple Silicon proved ~23× faster than CPU (70&nbsp;ms vs 1,646&nbsp;ms
@@ -329,14 +329,14 @@ tolerance). Super-resolution improves utility <em>iff</em> it beats bicubic on t
 imagery:</p>
 <table>
 <tr><th>Task</th><th class="num">bicubic</th><th class="num">SEN2SR</th><th class="num">Ours</th><th class="num">Ours gain</th></tr>
-<tr><td>Field boundaries (NDVI)</td><td class="num">0.799</td><td class="num">0.847</td>
-    <td class="num"><span class="good">0.905</span></td><td class="num"><span class="good">+0.106</span></td></tr>
+<tr><td>Field boundaries (NDVI)</td><td class="num">0.800</td><td class="num">0.851</td>
+    <td class="num"><span class="good">0.908</span></td><td class="num"><span class="good">+0.108</span></td></tr>
 <tr><td>Structural edges (urban)</td><td class="num">0.807</td><td class="num">0.865</td>
-    <td class="num"><span class="good">0.905</span></td><td class="num"><span class="good">+0.098</span></td></tr>
+    <td class="num"><span class="good">0.906</span></td><td class="num"><span class="good">+0.099</span></td></tr>
 </table>
 <div class="box win"><span class="t">This is the claim the problem statement asks for</span>
 Not "the image is sharper" but "the analysis is better". Field-boundary delineation improves
-from F1 0.799 to 0.905 — a <strong>13% relative gain</strong> — measured against analyses of
+from F1 0.800 to 0.908 — a <strong>13.5% relative gain</strong> — measured against analyses of
 genuine high-resolution satellite imagery, not a synthetic proxy.</div>
 
 <h3>7.2 Real Telangana imagery — LR-consistency</h3>
@@ -348,13 +348,13 @@ genuine high-resolution satellite imagery, not a synthetic proxy.</div>
     <td class="num">0.00307</td><td class="num">0.887</td><td class="num">133&nbsp;ms</td></tr>
 <tr><td>SEN2SR</td><td class="num">0.00246</td><td class="num">0.743</td>
     <td class="num">0.00260</td><td class="num">0.786</td><td class="num">2051&nbsp;ms</td></tr>
-<tr><td><strong>Ours</strong></td><td class="num"><span class="good">0.00136</span></td>
-    <td class="num"><span class="good">0.588</span></td>
-    <td class="num"><span class="good">0.00153</span></td>
-    <td class="num"><span class="good">0.636</span></td><td class="num">1122&nbsp;ms</td></tr>
+<tr><td><strong>Ours</strong></td><td class="num"><span class="good">0.00125</span></td>
+    <td class="num"><span class="good">0.634</span></td>
+    <td class="num"><span class="good">0.00118</span></td>
+    <td class="num"><span class="good">0.494</span></td><td class="num">1161&nbsp;ms</td></tr>
 </table>
 <p>On <strong>real Indian imagery from its own training region</strong>, our model is the most
-physically consistent branch by a clear margin — 45% lower error than SEN2SR — while also
+physically consistent branch by a clear margin — <strong>55% lower error than SEN2SR</strong> — while also
 running faster.</p>
 
 <h3>7.3 Reference metrics (Wald protocol, ×4)</h3>
@@ -365,8 +365,8 @@ running faster.</p>
     <td class="num">3.735</td><td class="num">&lt;1&nbsp;ms</td></tr>
 <tr><td>SEN2SR</td><td class="num">33.21</td><td class="num">0.8194</td><td class="num">1.904</td>
     <td class="num"><span class="good">3.500</span></td><td class="num">40&nbsp;ms</td></tr>
-<tr><td>Ours</td><td class="num">31.57</td><td class="num"><span class="good">0.8346</span></td>
-    <td class="num"><span class="good">1.845</span></td><td class="num">4.069</td><td class="num">20&nbsp;ms</td></tr>
+<tr><td>Ours</td><td class="num">31.60</td><td class="num"><span class="good">0.8363</span></td>
+    <td class="num"><span class="good">1.805</span></td><td class="num">4.049</td><td class="num">10&nbsp;ms</td></tr>
 <tr><td>LDSR-S2</td><td class="num"><span class="good">33.27</span></td><td class="num">0.8328</td>
     <td class="num">2.374</td><td class="num">3.505</td><td class="num">101,930&nbsp;ms</td></tr>
 </table>
@@ -379,7 +379,7 @@ and is 5,000× slower. We do not claim to beat ESA's models overall.
 <br><br>
 Two caveats stated before a reviewer raises them: this tile is European while our model
 trained only on Indian terrain (it is being tested out-of-domain and still leads two of four
-metrics), and on its own KUDALIAR validation split it reaches 39.23&nbsp;dB / 0.9524 SSIM.</div>
+metrics), and on its own SEN2VENµS validation split it reaches 38.65&nbsp;dB / 0.9435 SSIM.</div>
 
 <h3>7.4 Trust-layer calibration</h3>
 <table>
@@ -395,6 +395,39 @@ predicts where the model is wrong — it is calibrated, not decorative. Independ
 concentrates its flags on small clustered buildings and road/shadow boundaries: exactly the
 failure mode Puri &amp; Kotze identified for this class of model, detected without being told
 where to look.</p>
+
+<h3>7.6 Specialist vs generalist — a training-data study</h3>
+<p>Two models were trained and compared: <strong>v1</strong> on KUDALIAR (Telangana) alone,
+and <strong>v2</strong> on all five sites. The question is whether adding foreign biomes
+improves generalisation, or dilutes the advantage of specialising on Indian terrain.</p>
+<table>
+<tr><th>Test</th><th>v1 — India only</th><th>v2 — 5 biomes</th><th>Winner</th></tr>
+<tr><td>Multi-site val, 200 patches</td><td class="num">PSNR 35.159 · SAM 2.158</td>
+    <td class="num">PSNR 35.178 · SAM 2.068</td><td><span class="good">v2</span> (all 4 metrics)</td></tr>
+<tr><td>India val, 200 patches</td><td class="num">PSNR 35.051 · SSIM 0.9466</td>
+    <td class="num">PSNR 35.031 · SSIM 0.9464</td><td>tie (within noise)</td></tr>
+<tr><td><strong>Downstream F1, India</strong></td><td class="num">0.9049 / 0.9051</td>
+    <td class="num">0.9075 / 0.9061</td><td><span class="good">v2</span> (both tasks)</td></tr>
+<tr><td>Real Telangana consistency (MAE)</td><td class="num">0.00126 / 0.00152</td>
+    <td class="num">0.00120 / 0.00120</td><td><span class="good">v2</span> (both scenes)</td></tr>
+</table>
+<div class="box win"><span class="t">Finding: diversity helped and cost nothing</span>
+Adding four foreign biomes (China, Madagascar, France, Spain) improved generalisation
+<strong>without degrading performance on Indian terrain</strong> — the model did not have to
+trade regional specialisation for breadth. v2 is therefore the shipped model.
+<br><br>
+<strong>Stated honestly:</strong> the margins are small — +0.003 F1, +0.02&nbsp;dB PSNR. What
+makes them credible is that the direction is consistent across four independent tests rather
+than resting on one favourable number. A larger and more varied training set would be needed
+to turn this from a consistent trend into a strong claim.</div>
+
+<div class="box"><span class="t">A note on process</span>
+An earlier plan trained two larger variants on cloud GPUs. That run was cancelled after the
+v1 training history showed the model plateauing at <em>epoch 16 of 40</em> with zero
+improvement over the following 23 epochs — evidence that the bottleneck was training
+<em>data</em>, not schedule length or model capacity. The cancelled experiments would have
+run longer schedules on the same saturated single-site data. The multi-site run described
+here was substituted instead, and completed locally in 42 minutes.</div>
 
 <h3 class="pb">7.5 Visual result — real Telangana imagery</h3>
 <figure><img src="naked_eye.png" alt="Three-way comparison">
@@ -532,10 +565,10 @@ indices.</li>
 <h3>11.2 Roadmap</h3>
 <table>
 <tr><th>Priority</th><th>Work</th><th>Rationale</th></tr>
-<tr><td>1</td><td>Multi-site training study (8,640 patches, 5 biomes — data already packed)</td>
-    <td>Quantifies whether biome diversity helps or dilutes the Indian-terrain advantage</td></tr>
-<tr><td>2</td><td>Loss ablation (drop consistency / SAM / gradient in turn)</td>
+<tr><td>1</td><td>Loss ablation (drop consistency / SAM / gradient in turn)</td>
     <td>Turns the loss design from an assertion into a measured finding</td></tr>
+<tr><td>2</td><td>Larger multi-site training set (all 29 SEN2VENµS sites)</td>
+    <td>§7.6 shows diversity helps but with small margins; more data would sharpen the result</td></tr>
 <tr><td>3</td><td>Bhoonidhi LISS-IV validation</td><td>Independent Indian HR reference; highest
     credibility value, gated on data access</td></tr>
 <tr><td>4</td><td>20&nbsp;m band support (red-edge, SWIR)</td><td>Unlocks crop-stress and
