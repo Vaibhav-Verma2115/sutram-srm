@@ -24,7 +24,9 @@ WORK = pathlib.Path("/kaggle/working")
 
 
 def find_shards() -> pathlib.Path:
-    hits = list(DATA.glob("*/sen2venus_x4/manifest.json")) + list(DATA.glob("*/manifest.json"))
+    # Kaggle has mounted datasets at /kaggle/input/<slug>/ historically and at
+    # /kaggle/input/datasets/<user>/<slug>/ in the newer layout; rglob covers both.
+    hits = sorted(DATA.rglob("manifest.json"))
     if not hits:
         sys.exit(f"no manifest.json under {DATA}")
     return hits[0].parent
@@ -39,13 +41,13 @@ def main() -> None:
     shards = find_shards()
     print("shards:", shards, flush=True)
 
-    code = next(DATA.glob("*/code"), None)
+    code = next((d for d in DATA.rglob("code") if (d / "scripts").exists()), None)
     if code is None:
         sys.exit("code/ directory not found in the dataset")
     sys.path.insert(0, str(code / "src"))
 
     # train.py warm-starts from a path relative to CWD; stage the weights there.
-    weights = next(DATA.glob("*/weights/model.safetensor"), None)
+    weights = next(DATA.rglob("weights/model.safetensor"), None)
     if weights:
         dst = WORK / "models" / "SEN2SRLite_NonReference_RGBN_x4"
         dst.mkdir(parents=True, exist_ok=True)
