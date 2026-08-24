@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Sutram SRM — Pipeline Documentation</title>
+<style>
+@page { size: A4; margin: 18mm 16mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+       font-size: 10pt; line-height: 1.5; color: #1a1a1a; margin: 0; }
+h1 { font-size: 21pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+h2 { font-size: 13pt; margin: 8mm 0 2.5mm; padding-bottom: 1.5mm;
+     border-bottom: 1.6pt solid #16506b; color: #16506b; page-break-after: avoid; }
+h3 { font-size: 10.5pt; margin: 5mm 0 1.5mm; color: #333; page-break-after: avoid; }
+p  { margin: 0 0 2.5mm; }
+ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+li { margin-bottom: 1.2mm; }
+code { font-family: "SF Mono", Menlo, monospace; font-size: 8.6pt;
+       background: #f2f4f6; padding: 0.4mm 1mm; border-radius: 1.5px; }
+pre { font-family: "SF Mono", Menlo, monospace; font-size: 8.2pt; line-height: 1.4;
+      background: #f7f9fa; border: 0.4pt solid #d5dde2; border-left: 2.5pt solid #16506b;
+      padding: 2.5mm 3mm; margin: 0 0 3mm; white-space: pre; overflow-x: hidden;
+      page-break-inside: avoid; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 3.5mm; font-size: 8.8pt;
+        page-break-inside: avoid; }
+th { background: #16506b; color: #fff; text-align: left; padding: 1.6mm 2mm; font-weight: 600; }
+td { border-bottom: 0.4pt solid #dde3e7; padding: 1.5mm 2mm; vertical-align: top; }
+tr:nth-child(even) td { background: #fafbfc; }
+.lead { font-size: 10.5pt; color: #444; margin-bottom: 4mm; }
+.meta { font-size: 8.5pt; color: #667; border-top: 0.4pt solid #ccd;
+        padding-top: 2mm; margin-bottom: 6mm; }
+.box { background: #f4f8fa; border: 0.4pt solid #c5d6e0; border-radius: 2px;
+       padding: 2.5mm 3mm; margin: 0 0 3.5mm; page-break-inside: avoid; }
+.box .t { font-weight: 700; color: #16506b; display: block; margin-bottom: 1mm; font-size: 9.5pt; }
+.warn { background: #fdf6ec; border-color: #e6c98a; }
+.warn .t { color: #96650d; }
+.good { color: #1d7a3e; font-weight: 600; }
+.bad  { color: #b3341f; font-weight: 600; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pb { page-break-before: always; }
+footer { margin-top: 8mm; padding-top: 2mm; border-top: 0.4pt solid #ccd;
+         font-size: 8pt; color: #778; }
+</style></head><body>
+
+<h1>Deep Learning Super-Resolution Mapping</h1>
+<p class="lead">Sentinel-2 10&nbsp;m &rarr; 2.5&nbsp;m with per-pixel trust — pipeline documentation.</p>
+<p class="meta"><strong>Team Sutram</strong> · Smart India Hackathon · Problem statement:
+<em>Deep Learning Based Super Resolution Mapping (SRM) from Medium Resolution Satellite
+Imageries</em> · Document generated 24 August 2026</p>
+
+<h2>1. Problem and approach</h2>
+<p>Medium-resolution imagery (10–30&nbsp;m) gives broad coverage and frequent revisit, but
+cannot resolve narrow roads, small buildings, field boundaries or localised damage. The
+problem statement asks for generative enhancement to &lt;4&nbsp;m while preserving geographic
+and spectral consistency.</p>
+
+<div class="box"><span class="t">The central tension</span>
+The statement asks for two things that pull against each other: <em>reconstruct fine-scale
+detail</em>, and <em>clearly manage uncertainty because some reconstructed details are
+inferred by the model and not directly observed</em>. A system that only sharpens ignores the
+second; a system that only stays conservative ignores the first. Our design resolves this by
+running both kinds of model side by side and never shipping a super-resolved pixel without
+the map that says how much to trust it.</div>
+
+<h2>2. Pipeline architecture</h2>
+<pre>
+  Sentinel-2 L2A  (B04 B03 B02 B08 @ 10 m, Copernicus Data Space)
+         |
+  [1] Preprocessing ......... SCL cloud mask, reflectance scaling, tiling w/ overlap
+         |
+  [2] Branches (common interface, run in parallel)
+         |-- Bicubic ........ baseline control
+         |-- SEN2SR ......... fidelity branch, hard radiometric constraint
+         |-- LDSR-S2 ........ generative detail + per-pixel sigma (N diffusion samples)
+         '-- Ours ........... trained on SEN2VENuS incl. KUDALIAR (Telangana, India)
+         |
+  [3] Trust layer ........... LR-consistency | spectral angle | branch spread | sigma
+         |                              -> fused per-pixel confidence in [0,1]
+  [4] Reference validation .. Wald protocol, consistency check, calibration curve
+         |
+  [5] Product ............... 2.5 m COG GeoTIFF: 4 SR bands + sigma + confidence
+         |
+  [6] Downstream ............ NDVI, building edges, change detection
+</pre>
+
+<h2>3. Stage detail</h2>
+
+<h3>3.1 Preprocessing</h3>
+<ul>
+<li><strong>Cloud masking</strong> via the L2A Scene Classification Layer, rejecting classes
+0, 1, 3, 8, 9, 10 (no-data, saturated, cloud shadow, cloud medium/high probability, thin
+cirrus). Clouds are never super-resolved.</li>
+<li><strong>Reflectance scaling</strong> from int16 DN to 0–1 float (&divide;10000), clipped
+to the physical range.</li>
+<li><strong>Tiling</strong> at 128&times;128 with 32&nbsp;px overlap. Tiles are recombined with a
+Hann window so overlapping predictions cross-fade instead of leaving seam lines.</li>
+</ul>
+
+<h3>3.2 Branches</h3>
+<table>
+<tr><th>Branch</th><th>Model</th><th>Role</th><th>Uncertainty</th></tr>
+<tr><td>Bicubic</td><td>—</td><td>Control. Every claim is measured against it.</td><td>—</td></tr>
+<tr><td>SEN2SR</td><td>SPAN CNN, 472k params (ESA OpenSR)</td>
+    <td>Fidelity. Built-in hard constraint forces radiometric consistency, so these pixels
+    are the analysis-grade output.</td><td>—</td></tr>
+<tr><td>LDSR-S2</td><td>Latent diffusion, 169M params (ESA OpenSR)</td>
+    <td>Detail. Sharpest imagery, offered for visual interpretation.</td>
+    <td>Per-pixel &sigma; from N stochastic samples</td></tr>
+<tr><td><strong>Ours</strong></td><td>SPAN CNN fine-tuned on SEN2VENuS</td>
+    <td>Team-trained model, specialised on Indian terrain with a physically-grounded
+    objective.</td><td>via trust layer</td></tr>
+</table>
+<p>All four expose the same <code>predict(lr) -&gt; Prediction</code> interface, so the trust
+layer and evaluation harness treat them identically and a new branch needs no special-casing.</p>
+
+<h3>3.3 Trust layer</h3>
+<p>Four independent signals, fused into one confidence map:</p>
+<table>
+<tr><th>Signal</th><th>What it measures</th><th>Why it catches invention</th></tr>
+<tr><td>LR-consistency</td><td>Downsample the SR output through the Sentinel-2 PSF and
+    compare against the true input</td><td><strong>Physical, not learned.</strong>
+    Disagreement means the model produced radiometry the sensor never recorded.</td></tr>
+<tr><td>Spectral angle</td><td>Per-pixel SAM between input and downsampled SR</td>
+    <td>Catches colour drift that L1 error hides; brightness-invariant.</td></tr>
+<tr><td>Branch spread</td><td>Normalised difference between the fidelity and generative
+    branches</td><td>Where a conservative regressor and a diffusion model disagree, the
+    detail is model-invented rather than observed.</td></tr>
+<tr><td>Sampling &sigma;</td><td>Std-dev across N diffusion samples</td>
+    <td>Pixels the model is certain about barely move between runs; hallucinated structure
+    varies.</td></tr>
+</table>
+<p>The fused confidence ships as a band <em>inside</em> the same GeoTIFF as the imagery — a
+deliberate choice, so a downstream user cannot load the sharpened pixels without also having
+the map that qualifies them.</p>
+
+<h3>3.4 Reference validation</h3>
+<p>There is no 2.5&nbsp;m ground truth for an arbitrary Sentinel-2 scene, so the model is
+validated where truth does exist, using <strong>Wald's protocol</strong>: degrade the
+reference &times;4, super-resolve it back, and score against the original. Degradation uses a
+Gaussian approximation of the Sentinel-2 MTF, <em>not</em> bicubic — a model trained and
+tested on bicubic degradation learns to invert bicubic and then fails on real imagery whose
+blur comes from the instrument optics.</p>
+<p>Separately, the <strong>LR-consistency check</strong> requires no ground truth at all and
+therefore runs on every product we ship.</p>
+
+<h2 class="pb">4. Training data</h2>
+<p>Branch 4 is trained on <strong>SEN2VENuS v2.0.0</strong> — real Sentinel-2 / VENuS pairs
+acquired the same day over the same ground, already co-registered.</p>
+
+<div class="box"><span class="t">Why same-day pairing matters</span>
+Puri &amp; Kotze (AGILE 2022) traced invented objects in their SRGAN outputs to a 25–30 day
+acquisition gap between low- and high-resolution imagery: the model learned to reconstruct
+<em>change</em> as if it were <em>detail</em>. Same-day pairs remove that failure mode at
+source rather than patching it later.</div>
+
+<p>Of the 29 sites (139.5&nbsp;GB total) we take a deliberately small subset:</p>
+<table>
+<tr><th>Site</th><th>Location</th><th class="num">Patches</th><th>Why</th></tr>
+<tr><td><strong>KUDALIAR</strong></td><td>Telangana, <strong>India</strong></td>
+    <td class="num">7,269</td><td>Puts real Indian terrain in the training set — the point of
+    the whole exercise for an SIH jury.</td></tr>
+<tr><td>ANJI</td><td>China</td><td class="num">2,312</td><td>Mixed agriculture / forest</td></tr>
+<tr><td>MAD-AMBO</td><td>Madagascar</td><td class="num">1,442</td><td>Tropical</td></tr>
+<tr><td>SUDOUE-4</td><td>France</td><td class="num">935</td><td>Agricultural parcels</td></tr>
+<tr><td>ESTUAMAR</td><td>Spain</td><td class="num">911</td><td>Coastal / estuary</td></tr>
+</table>
+
+<h3>4.1 The scale subtlety — and how we resolve it</h3>
+<div class="box warn"><span class="t">SEN2VENuS is natively &times;2, not &times;4</span>
+Pairs are 10&nbsp;m Sentinel-2 against 5&nbsp;m VENuS (128 &rarr; 256&nbsp;px). Our deployment
+target is &times;4 (10&nbsp;m &rarr; 2.5&nbsp;m), and no open global 2.5&nbsp;m reference
+exists. Stating this openly is stronger than letting a reviewer discover it.</div>
+<table>
+<tr><th>Mode</th><th>Input</th><th>Target</th><th>Scale</th></tr>
+<tr><td><code>--scale 2</code></td><td>real S2 10&nbsp;m</td><td>real VENuS 5&nbsp;m</td>
+    <td>&times;2, fully real</td></tr>
+<tr><td><code>--scale 4</code></td><td>S2 degraded to 20&nbsp;m <em>via the S2 PSF</em></td>
+    <td><strong>real VENuS 5&nbsp;m</strong></td><td>&times;4, real HR target</td></tr>
+</table>
+<p>In &times;4 mode only the <em>input</em> is synthetic, and it is synthesised with the
+sensor's own response rather than bicubic. The model therefore learns to invert a realistic
+sensor degradation against a genuine high-resolution reference. This is Wald's protocol
+applied to <em>training</em> rather than evaluation, and it is what makes a &times;4 claim
+defensible without owning 2.5&nbsp;m imagery.</p>
+
+<h3>4.2 Patch quality filtering</h3>
+<p>Patches are gated on <strong>contrast</strong>, not on the fraction of zero-valued pixels.
+These archives carry no no-data sentinel, and roughly 30% of pixels are legitimately zero
+over dark targets such as open water and closed rainforest canopy. An early zero-fraction
+filter rejected 129 of 129 patches — it was measuring darkness and discarding whole biomes.</p>
+
+<h2>5. Training objective</h2>
+<p>Deliberately <em>not</em> the standard ESRGAN recipe. VGG-19 perceptual loss is trained on
+8-bit consumer photographs and is mismatched to 16-bit reflectance; plain adversarial
+training cost Puri &amp; Kotze roughly 0.2 SSIM in artefacts. We instead optimise what the
+problem statement actually asks for:</p>
+<table>
+<tr><th>Term</th><th class="num">Weight</th><th>Purpose</th></tr>
+<tr><td>L1 on reflectance</td><td class="num">1.0</td><td>Radiometric accuracy</td></tr>
+<tr><td><strong>LR-consistency through the PSF</strong></td><td class="num">0.5</td>
+    <td>Do not invent radiometry</td></tr>
+<tr><td>Spectral angle (SAM)</td><td class="num">0.1</td>
+    <td>Spectral consistency, brightness-invariant</td></tr>
+<tr><td>Gradient</td><td class="num">0.1</td><td>Sharpness without a photographic prior</td></tr>
+</table>
+<div class="box"><span class="t">The consistency term is the interesting one</span>
+It is the differentiable form of the check the trust layer runs at inference. The model is
+penalised <em>during training</em> for exactly the behaviour we flag at
+<em>deployment</em> — the objective and the safety check measure the same quantity.</div>
+<p>Augmentation is dihedral only (rotations and flips). No colour jitter: shifting
+reflectance would teach the model that radiometry is negotiable, which is the one thing this
+pipeline must not learn.</p>
+
+<h2 class="pb">6. Results</h2>
+<h3>6.1 Wald protocol — 512&times;512 reference tile</h3>
+<table>
+<tr><th>Branch</th><th class="num">PSNR (dB)</th><th class="num">SSIM</th>
+    <th class="num">SAM (&deg;)</th><th class="num">ERGAS</th><th class="num">Time</th></tr>
+<tr><td>Bicubic</td><td class="num">32.68</td><td class="num">0.7965</td>
+    <td class="num">2.025</td><td class="num">3.735</td><td class="num">1 ms</td></tr>
+<tr><td>SEN2SR</td><td class="num"><span class="good">33.21</span></td>
+    <td class="num"><span class="good">0.8194</span></td>
+    <td class="num"><span class="good">1.904</span></td>
+    <td class="num"><span class="good">3.500</span></td><td class="num">40 ms</td></tr>
+</table>
+<p>For reference, Puri &amp; Kotze (2022) report PSNR &asymp; 29.9 / SSIM &asymp; 0.71 for
+SRResNet on Sentinel-2 &rarr; 2.5&nbsp;m near Bangalore. Their figures come from different
+imagery and are not directly comparable, but they establish the order of magnitude a
+published baseline achieves on this task.</p>
+
+<h3>6.2 LR-consistency on real input — no ground truth required</h3>
+<table>
+<tr><th>Branch</th><th class="num">Consistency MAE</th><th class="num">Consistency SAM (&deg;)</th>
+    <th>Interpretation</th></tr>
+<tr><td>SEN2SR</td><td class="num"><span class="good">0.00384</span></td>
+    <td class="num"><span class="good">0.880</span></td>
+    <td>Hard constraint doing its job</td></tr>
+<tr><td>Bicubic</td><td class="num">0.00488</td><td class="num">1.032</td>
+    <td>No invention, but no detail either</td></tr>
+<tr><td>LDSR-S2</td><td class="num"><span class="bad">0.00586</span></td>
+    <td class="num"><span class="bad">1.577</span></td>
+    <td>Sharpest imagery, furthest from what the sensor measured</td></tr>
+</table>
+<p>This ordering is the empirical justification for the two-branch design. The generative
+branch produces the most convincing pictures <em>and</em> drifts furthest from the
+observation — so it is offered for visual interpretation while SEN2SR carries the
+analysis-grade pixels.</p>
+
+<h3>6.3 The trust layer is calibrated, not decorative</h3>
+<p>Binning pixels by predicted confidence and measuring their actual error against ground
+truth:</p>
+<table>
+<tr><th>Confidence bin</th><th class="num">0.0–0.1</th><th class="num">0.3–0.4</th>
+    <th class="num">0.6–0.7</th><th class="num">0.8–0.9</th><th class="num">0.9–1.0</th></tr>
+<tr><td>Mean absolute error</td><td class="num">0.0366</td><td class="num">0.0296</td>
+    <td class="num">0.0223</td><td class="num">0.0152</td>
+    <td class="num"><span class="good">0.0087</span></td></tr>
+</table>
+<p>Error falls monotonically as confidence rises — a <strong>4&times; reduction</strong> from
+the least to the most confident bin, correlation &minus;0.38. The confidence map genuinely
+predicts where the model is wrong. Independently, it concentrates its flags on small
+clustered buildings and road/shadow boundaries: precisely the failure mode Puri &amp; Kotze
+identified for this class of model, detected without being told to look there.</p>
+
+<h2>7. Output product</h2>
+<p>A Cloud-Optimised GeoTIFF at 2.5&nbsp;m with six bands:</p>
+<table>
+<tr><th class="num">Band</th><th>Name</th><th>Contents</th></tr>
+<tr><td class="num">1–4</td><td>B04, B03, B02, B08</td><td>Super-resolved reflectance (0–1)</td></tr>
+<tr><td class="num">5</td><td>sigma</td><td>Per-pixel sampling uncertainty</td></tr>
+<tr><td class="num">6</td><td>confidence</td><td>Fused trust score in [0, 1]</td></tr>
+</table>
+<p><strong>Footprint preservation is verified, not assumed.</strong> The affine transform is
+rescaled so pixel size divides by 4 while the bounding box stays fixed;
+<code>check_footprint()</code> runs after every write and confirms CRS match and bound drift.
+Measured drift on all products to date: <span class="good">0.00&nbsp;m</span>.</p>
+
+<h2>8. Repository and usage</h2>
+<table>
+<tr><th>Path</th><th>Contents</th></tr>
+<tr><td><code>src/srm/preprocess/</code></td><td>SCL masking, tiling, Hann feathering</td></tr>
+<tr><td><code>src/srm/models/</code></td><td>Branch wrappers behind one interface</td></tr>
+<tr><td><code>src/srm/trust/</code></td><td>LR-consistency, SAM, &Delta;NDVI, confidence fusion</td></tr>
+<tr><td><code>src/srm/validate/</code></td><td>Wald protocol, consistency check, calibration</td></tr>
+<tr><td><code>src/srm/train/</code></td><td>Losses, shard dataset, model builder</td></tr>
+<tr><td><code>src/srm/io/</code></td><td>COG writing, CRS / footprint preservation</td></tr>
+<tr><td><code>scripts/</code></td><td>Fetch, build, train, infer, evaluate</td></tr>
+<tr><td><code>app/demo.py</code></td><td>Streamlit demo (runs offline on precomputed products)</td></tr>
+<tr><td><code>notebooks/</code></td><td>Colab training notebook, Drive-checkpointed</td></tr>
+</table>
+<pre>
+# Super-resolve a scene -> COG with sigma + confidence
+python scripts/run_inference.py --input scene.tif --out out/scene_sr \
+       --branches bicubic,sen2sr,ldsr,ours
+
+# Benchmark every branch with Wald's protocol
+python scripts/evaluate.py --input data/raw/test_ref_2p5m.tif
+
+# Train branch 4
+python scripts/fetch_sen2venus.py --sites KUDALIAR
+python scripts/build_dataset.py  --sites KUDALIAR --scale 4
+python scripts/train.py --data data/interim/sen2venus_x4 --epochs 40 --device mps
+</pre>
+
+<h2>9. Engineering notes</h2>
+<ul>
+<li><strong>Reflectance-aware throughout.</strong> Metrics use max reflectance = 1.0, not 255.</li>
+<li><strong>Custom tiling.</strong> <code>sen2sr.predict_large</code> derives output height
+from input <em>width</em>, silently corrupting non-square rasters; we replace it with
+Hann-feathered blending.</li>
+<li><strong>Streaming dataset build.</strong> Shards are flushed incrementally — buffering
+KUDALIAR whole is ~4&nbsp;GB, too close to a free Colab VM's ceiling.</li>
+<li><strong>Disconnect-tolerant training.</strong> Checkpoints every epoch; <code>--resume</code>
+restores model, optimiser, scaler and epoch counter.</li>
+<li><strong>Local training is viable.</strong> On Apple Silicon (M5&nbsp;Pro, MPS) a training
+step runs ~23&times; faster than CPU, putting a 40-epoch run at roughly 16 minutes.</li>
+</ul>
+
+<h2>10. Honest limitations</h2>
+<ul>
+<li>&times;4 super-resolution is ill-posed: the output has 16&times; more unknowns than the input
+has measurements. Detail below roughly 4&nbsp;m is <em>inferred</em>, not observed.</li>
+<li>We do not claim to reveal objects absent from the input. The claim is sharper delineation
+of features already partially resolved — and an explicit map of where even that is uncertain.</li>
+<li>The &times;4 operator is trained at 20&nbsp;m&nbsp;&rarr;&nbsp;5&nbsp;m and applied at
+10&nbsp;m&nbsp;&rarr;&nbsp;2.5&nbsp;m, which assumes scale-invariance of the degradation.</li>
+<li>Validation against Indian high-resolution references (Bhoonidhi LISS-IV, 5.8&nbsp;m)
+is planned but not yet complete.</li>
+</ul>
+
+<h2>11. References</h2>
+<ol>
+<li>Aybar et al. <em>A radiometrically and spatially consistent super-resolution framework for
+Sentinel-2.</em> Remote Sensing of Environment, 2025. (SEN2SR)</li>
+<li>Donike et al. <em>Trustworthy Super-Resolution of Multispectral Sentinel-2 Imagery with
+Latent Diffusion.</em> IEEE JSTARS, 2025. (LDSR-S2)</li>
+<li>Michel et al. <em>SEN2VENuS, a Dataset for the Training of Sentinel-2 Super-Resolution
+Algorithms.</em> Data, 2022. Zenodo record 14603764, v2.0.0.</li>
+<li>Puri &amp; Kotze. <em>Evaluation of SRGAN Algorithm for Superresolution of Satellite
+Imagery on Different Sensors.</em> AGILE GIScience Series 3:57, 2022.</li>
+<li>Wald, Ranchin &amp; Mangolini. <em>Fusion of satellite images of different spatial
+resolutions.</em> PE&amp;RS, 1997. (Validation protocol)</li>
+<li>ESA OpenSR project — <code>opensr-test</code> benchmark framework.</li>
+</ol>
+
+<footer>Team Sutram · SIH · Pipeline documentation · Generated 24 August 2026 from the
+project repository. Results in section 6 are from the pretrained branches; branch 4
+(&ldquo;Ours&rdquo;) figures follow once training on KUDALIAR completes.</footer>
+
+</body></html>
