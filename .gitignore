@@ -13,3 +13,4 @@ checkpoints/
 .DS_Store
 .ipynb_checkpoints/
 models/
+!docs/*.pdf
