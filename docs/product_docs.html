@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Sutram SRM — Product Documentation Set</title>
+<style>
+@page { size: A4; margin: 17mm 15mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+       font-size: 9.5pt; line-height: 1.45; color: #1a1a1a; margin: 0; }
+h1 { font-size: 20pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+h2 { font-size: 15pt; margin: 0 0 4mm; padding: 2.5mm 0 2mm; color: #fff;
+     background: #16506b; padding-left: 3mm; page-break-after: avoid; }
+h3 { font-size: 11.5pt; margin: 6mm 0 2mm; padding-bottom: 1.2mm;
+     border-bottom: 1.2pt solid #16506b; color: #16506b; page-break-after: avoid; }
+h4 { font-size: 9.8pt; margin: 4mm 0 1.5mm; color: #333; page-break-after: avoid; }
+p { margin: 0 0 2.2mm; }
+ul, ol { margin: 0 0 2.8mm; padding-left: 5mm; }
+li { margin-bottom: 1mm; }
+code { font-family: "SF Mono", Menlo, monospace; font-size: 8.2pt;
+       background: #f2f4f6; padding: 0.3mm 0.9mm; border-radius: 1.5px; }
+pre { font-family: "SF Mono", Menlo, monospace; font-size: 7.9pt; line-height: 1.35;
+      background: #f7f9fa; border: 0.4pt solid #d5dde2; border-left: 2.5pt solid #16506b;
+      padding: 2.2mm 2.8mm; margin: 0 0 3mm; white-space: pre; page-break-inside: avoid; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 3.2mm; font-size: 8.4pt;
+        page-break-inside: avoid; }
+th { background: #16506b; color: #fff; text-align: left; padding: 1.4mm 1.8mm; font-weight: 600; }
+td { border-bottom: 0.4pt solid #dde3e7; padding: 1.3mm 1.8mm; vertical-align: top; }
+tr:nth-child(even) td { background: #fafbfc; }
+.lead { font-size: 10pt; color: #444; margin-bottom: 3mm; }
+.meta { font-size: 8.2pt; color: #667; border-top: 0.4pt solid #ccd;
+        padding-top: 2mm; margin-bottom: 5mm; }
+.box { background: #f4f8fa; border: 0.4pt solid #c5d6e0; border-radius: 2px;
+       padding: 2.2mm 2.8mm; margin: 0 0 3.2mm; page-break-inside: avoid; }
+.box .t { font-weight: 700; color: #16506b; display: block; margin-bottom: 0.8mm; font-size: 9.2pt; }
+.warn { background: #fdf6ec; border-color: #e6c98a; }
+.warn .t { color: #96650d; }
+.good { color: #1d7a3e; font-weight: 600; }
+.bad { color: #b3341f; font-weight: 600; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pb { page-break-before: always; }
+.p1 { background:#16506b; color:#fff; padding:1mm 2mm; border-radius:2px; font-size:7.6pt; font-weight:600; }
+.p2 { background:#5a8ca6; color:#fff; padding:1mm 2mm; border-radius:2px; font-size:7.6pt; font-weight:600; }
+.p3 { background:#b8c7d0; color:#243; padding:1mm 2mm; border-radius:2px; font-size:7.6pt; font-weight:600; }
+.toc { columns: 2; column-gap: 8mm; font-size: 9pt; }
+.toc div { margin-bottom: 1.2mm; break-inside: avoid; }
+footer { margin-top: 6mm; padding-top: 2mm; border-top: 0.4pt solid #ccd;
+         font-size: 7.8pt; color: #778; }
+</style></head><body>
+
+<h1>Sutram SRM — Product Documentation Set</h1>
+<p class="lead">Deep Learning Super-Resolution Mapping from Medium-Resolution Satellite
+Imagery. Sentinel-2 10&nbsp;m &rarr; 2.5&nbsp;m with per-pixel trust.</p>
+<p class="meta"><strong>Team Sutram</strong> · Smart India Hackathon · Generated 24 August 2026 ·
+Contains: PRD · SRS · System Architecture · UI/UX Specification · Development Plan</p>
+
+<div class="box"><span class="t">What this system is, in one paragraph</span>
+Sentinel-2 gives free, frequently-updated imagery of all of India at 10&nbsp;m per pixel — good
+enough to see a field, not good enough to see its boundary. Sutram SRM uses generative deep
+learning to reconstruct that imagery at 2.5&nbsp;m, and — critically — ships a per-pixel
+confidence map alongside it, so an analyst always knows which sharpened details are supported
+by the sensor data and which the model inferred. It is a super-resolution system that tells
+you when not to trust it.</div>
+
+<div class="toc">
+<div><strong>1. Product Requirements (PRD)</strong> — problem, users, goals, MVP, stories, metrics</div>
+<div><strong>2. Software Requirements (SRS)</strong> — functional requirements, rules, validation, security</div>
+<div><strong>3. System Architecture</strong> — stack, components, data flow, deployment</div>
+<div><strong>4. UI/UX Specification</strong> — journeys, screens, states, design system</div>
+<div><strong>5. Development Plan</strong> — roadmap, milestones, dependencies, Definition of Done</div>
+</div>
+
+<h2 class="pb">1. Product Requirements Document</h2>
+
+<h3>1.1 Problem statement</h3>
+<p>Medium-resolution satellite imagery (10–30&nbsp;m) is the backbone of operational Earth
+observation in India: it is free, covers the whole country, and refreshes every five days.
+But at 10&nbsp;m a village road is one pixel wide, a small building is sub-pixel, and a field
+boundary is a blur. Analysts in agriculture, urban planning and disaster response therefore
+face a hard choice:</p>
+<table>
+<tr><th>Option</th><th>Cost</th><th>Consequence</th></tr>
+<tr><td>Use free 10&nbsp;m imagery</td><td>Free, national coverage, 5-day revisit</td>
+    <td>Cannot resolve the features the decision actually depends on</td></tr>
+<tr><td>Buy commercial sub-metre imagery</td><td>Thousands of rupees per scene</td>
+    <td>Unaffordable at state or national scale; infrequent revisit</td></tr>
+</table>
+<p>Generative super-resolution promises a third option — but introduces a new and serious
+problem. A model that sharpens imagery is also a model that can <em>invent</em> imagery. An
+analyst shown a crisp building that the sensor never observed may make a real decision on a
+fabricated pixel. <strong>This risk, not image quality, is the reason super-resolution is not
+already operational in most agencies.</strong></p>
+
+<div class="box"><span class="t">The problem we are actually solving</span>
+Not &ldquo;make satellite images sharper&rdquo; — several open models already do that. The
+unsolved problem is <strong>making super-resolved imagery trustworthy enough to act on</strong>:
+producing enhanced imagery together with a defensible, validated statement of which pixels are
+supported by observation and which are model inference.</div>
+
+<h3>1.2 Target users</h3>
+<table>
+<tr><th>User</th><th>Context</th><th>Needs from the system</th></tr>
+<tr><td><strong>Remote-sensing analyst</strong><br>(primary)</td>
+    <td>State agriculture / urban development dept, ISRO centre, research lab</td>
+    <td>Enhanced GeoTIFFs that load in QGIS/ArcGIS with correct georeferencing; explicit
+    uncertainty; metrics they can defend in a report</td></tr>
+<tr><td><strong>Domain officer</strong><br>(secondary)</td>
+    <td>District agriculture officer, disaster response coordinator</td>
+    <td>Visual before/after for a specific area; a clear indication of where the imagery is
+    reliable; no GIS expertise required</td></tr>
+<tr><td><strong>ML researcher</strong><br>(tertiary)</td>
+    <td>Academic or agency R&amp;D</td>
+    <td>Reproducible benchmarks, swappable model branches, published validation protocol</td></tr>
+</table>
+
+<h3>1.3 Goals and non-goals</h3>
+<table>
+<tr><th>Goals</th><th>Non-goals</th></tr>
+<tr><td>Produce &times;4 super-resolved Sentinel-2 imagery (10&nbsp;m &rarr; 2.5&nbsp;m)</td>
+    <td>Compete with commercial sub-metre imagery on absolute resolution</td></tr>
+<tr><td>Preserve geospatial footprint and spectral consistency exactly</td>
+    <td>Provide a general-purpose GIS platform</td></tr>
+<tr><td>Quantify per-pixel uncertainty and validate that it predicts real error</td>
+    <td>Fully automated decision-making — a human stays in the loop</td></tr>
+<tr><td>Run on free/low-cost compute so any Indian institution can adopt it</td>
+    <td>Real-time or on-orbit processing</td></tr>
+<tr><td>Demonstrate value on Indian terrain specifically</td>
+    <td>Multi-sensor support (Landsat, SAR) in v1</td></tr>
+</table>
+
+<h3>1.4 Core features</h3>
+<table>
+<tr><th>#</th><th>Feature</th><th>Description</th><th>Priority</th></tr>
+<tr><td>F1</td><td>Super-resolution engine</td>
+    <td>Four interchangeable model branches behind one interface: bicubic baseline, SEN2SR
+    (fidelity), LDSR-S2 (generative detail), and our SEN2VENuS-trained model</td>
+    <td><span class="p1">P0</span></td></tr>
+<tr><td>F2</td><td>Trust layer</td>
+    <td>Fuses LR-consistency, spectral angle, branch disagreement and sampling variance into a
+    per-pixel confidence map in [0,1]</td><td><span class="p1">P0</span></td></tr>
+<tr><td>F3</td><td>Geospatial integrity</td>
+    <td>CRS and footprint preserved to zero drift; output is a valid COG with overviews</td>
+    <td><span class="p1">P0</span></td></tr>
+<tr><td>F4</td><td>Preprocessing</td>
+    <td>SCL cloud masking, reflectance scaling, overlap tiling with Hann feathering</td>
+    <td><span class="p1">P0</span></td></tr>
+<tr><td>F5</td><td>Validation harness</td>
+    <td>Wald protocol, PSNR/SSIM/SAM/ERGAS, and a calibration curve proving confidence
+    predicts error</td><td><span class="p1">P0</span></td></tr>
+<tr><td>F6</td><td>Visual demo application</td>
+    <td>Browser UI: before/after comparison, confidence overlay, NDVI, metrics</td>
+    <td><span class="p2">P1</span></td></tr>
+<tr><td>F7</td><td>Model training pipeline</td>
+    <td>SEN2VENuS ingestion, shard packing, disconnect-tolerant training</td>
+    <td><span class="p2">P1</span></td></tr>
+<tr><td>F8</td><td>Downstream task demos</td>
+    <td>NDVI field boundaries, building edges, two-date change detection</td>
+    <td><span class="p2">P1</span></td></tr>
+<tr><td>F9</td><td>AOI selection in-app</td>
+    <td>Draw a bounding box, fetch Sentinel-2, process end to end</td>
+    <td><span class="p3">P2</span></td></tr>
+<tr><td>F10</td><td>Batch / API service</td>
+    <td>Queue many scenes; REST endpoint for programmatic access</td>
+    <td><span class="p3">P2</span></td></tr>
+</table>
+
+<h3>1.5 MVP scope</h3>
+<p>The MVP is deliberately narrow: <strong>F1–F6 only</strong>, RGB+NIR bands, on
+pre-downloaded scenes.</p>
+<table>
+<tr><th>In MVP</th><th>Deferred, and why</th></tr>
+<tr><td>4 bands (B04, B03, B02, B08) at &times;4</td>
+    <td>20&nbsp;m red-edge/SWIR bands — doubles data engineering for marginal demo value</td></tr>
+<tr><td>Manually downloaded Sentinel-2 scenes</td>
+    <td>In-app AOI fetch — adds an external API dependency that can fail during a live demo</td></tr>
+<tr><td>Single-user local application</td>
+    <td>Accounts, roles, multi-tenancy — no second user exists yet</td></tr>
+<tr><td>Precomputed products in the demo</td>
+    <td>Live inference in-app — LDSR takes ~100&nbsp;s/tile; unacceptable interactively</td></tr>
+<tr><td>Streamlit UI</td>
+    <td>Custom React frontend — would consume the whole build budget for no added capability</td></tr>
+</table>
+<div class="box warn"><span class="t">Explicit anti-scope</span>
+No user accounts, no database, no cloud deployment, no mobile app, no real-time processing, no
+multi-sensor support in the MVP. Each of these is a plausible future feature and none of them
+help the system produce a trustworthy super-resolved pixel, which is the entire point.</div>
+
+<h3>1.6 User stories</h3>
+<table>
+<tr><th>ID</th><th>As a…</th><th>I want to…</th><th>So that…</th></tr>
+<tr><td>US-1</td><td>Analyst</td><td>Upload a Sentinel-2 scene and get a 2.5&nbsp;m GeoTIFF</td>
+    <td>I can see features my 10&nbsp;m imagery cannot resolve</td></tr>
+<tr><td>US-2</td><td>Analyst</td><td>Open the output in QGIS and have it align exactly with
+    the input</td><td>I can overlay it on my existing map layers without reprojection</td></tr>
+<tr><td>US-3</td><td>Analyst</td><td>See which pixels the model is unsure about</td>
+    <td>I never base a decision on invented detail</td></tr>
+<tr><td>US-4</td><td>Analyst</td><td>Read a metrics report for the product</td>
+    <td>I can defend the output in a technical review</td></tr>
+<tr><td>US-5</td><td>Officer</td><td>Compare before and after with a slider</td>
+    <td>I can immediately judge whether the enhancement helps my area</td></tr>
+<tr><td>US-6</td><td>Officer</td><td>Toggle a red overlay of low-confidence regions</td>
+    <td>I can tell at a glance where to be cautious</td></tr>
+<tr><td>US-7</td><td>Officer</td><td>View NDVI before and after</td>
+    <td>I can see sharper field boundaries without the vegetation signal shifting</td></tr>
+<tr><td>US-8</td><td>Researcher</td><td>Benchmark all branches on the same tile</td>
+    <td>I can choose the right model for my use case</td></tr>
+<tr><td>US-9</td><td>Researcher</td><td>Train the model on my own paired data</td>
+    <td>I can specialise it to my region</td></tr>
+<tr><td>US-10</td><td>Researcher</td><td>Resume training after a disconnect</td>
+    <td>I can use free-tier compute without losing work</td></tr>
+</table>
+
+<h3>1.7 Success metrics</h3>
+<table>
+<tr><th>Metric</th><th>Target</th><th>Status</th></tr>
+<tr><td>PSNR improvement over bicubic (Wald protocol)</td><td>&ge; +0.5&nbsp;dB</td>
+    <td class="good">Met — SEN2SR +0.53&nbsp;dB</td></tr>
+<tr><td>Spectral fidelity (SAM)</td><td>&lt; 2.0&deg;</td>
+    <td class="good">Met — 1.904&deg;</td></tr>
+<tr><td>Geolocation drift</td><td>0&nbsp;m</td><td class="good">Met — 0.00&nbsp;m measured</td></tr>
+<tr><td>Confidence–error correlation</td><td>Negative and monotonic</td>
+    <td class="good">Met — r = &minus;0.38, error falls 4&times;</td></tr>
+<tr><td>Own model trained on Indian terrain</td><td>Converged, benchmarked</td>
+    <td class="good">Met — 5,400 KUDALIAR patches, val PSNR 39.23&nbsp;dB</td></tr>
+<tr><td>Inference speed (fidelity branch)</td><td>&lt; 1&nbsp;s per 128&times;128 tile</td>
+    <td class="good">Met — 40&nbsp;ms</td></tr>
+<tr><td>Demo runs offline without failure</td><td>100% of dry runs</td>
+    <td class="good">Met</td></tr>
+<tr><td>Downstream task improvement</td><td>Measurable gain in boundary delineation</td>
+    <td>Pending — planned evaluation</td></tr>
+</table>
+
+<h3>1.8 Assumptions</h3>
+<ul>
+<li>Sentinel-2 L2A remains freely available through the Copernicus Data Space.</li>
+<li>The &times;4 degradation operator is approximately scale-invariant, so a model trained at
+20&nbsp;m&nbsp;&rarr;&nbsp;5&nbsp;m transfers to 10&nbsp;m&nbsp;&rarr;&nbsp;2.5&nbsp;m.</li>
+<li>SEN2VENuS same-day pairs are co-registered well enough to train on without further alignment.</li>
+<li>Users have a GIS tool (QGIS is free) for consuming GeoTIFF output.</li>
+<li>A human reviews outputs before any operational decision.</li>
+</ul>
+
+<h3>1.9 Risks</h3>
+<table>
+<tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr>
+<tr><td>Model hallucinates plausible but false structures</td><td>High</td>
+    <td>Trust layer with four independent signals; validated calibration; confidence band
+    shipped inside the product file</td></tr>
+<tr><td>Reviewer challenges the &times;4 claim given &times;2 training data</td><td>High</td>
+    <td>Documented openly: real HR target, PSF-based synthetic input, Wald protocol applied
+    to training</td></tr>
+<tr><td>Diffusion branch too slow for interactive use</td><td>Medium</td>
+    <td>Precompute demo products; fidelity branch runs in 40&nbsp;ms for interactive paths</td></tr>
+<tr><td>Free-tier compute interrupts training</td><td>Medium</td>
+    <td>Per-epoch checkpointing with full optimiser-state resume</td></tr>
+<tr><td>Model underperforms on terrain unlike training data</td><td>Medium</td>
+    <td>Multi-site training; confidence map degrades gracefully and flags the shortfall</td></tr>
+<tr><td>Upstream package churn (stale checkpoint URLs)</td><td>Low</td>
+    <td>Pinned fetch scripts; already encountered and handled once</td></tr>
+</table>
+
+<h3>1.10 Acceptance criteria</h3>
+<ol>
+<li>Given a valid 4-band Sentinel-2 GeoTIFF, the system outputs a 6-band COG at exactly
+&frac14; the pixel size with identical bounds and CRS.</li>
+<li>Bands 5 and 6 of every output contain sigma and confidence respectively.</li>
+<li>Every branch is benchmarked on the same tile with PSNR, SSIM, SAM and ERGAS reported.</li>
+<li>The calibration curve shows mean error decreasing as confidence increases.</li>
+<li>The demo application runs with no network connection and displays imagery, confidence,
+NDVI and metrics.</li>
+<li>Training can be interrupted and resumed with no loss beyond the current epoch.</li>
+<li>All documentation regenerates from source.</li>
+</ol>
+
+<h2 class="pb">2. Software Requirements Specification</h2>
+
+<h3>2.1 Scope and interpretation</h3>
+<div class="box"><span class="t">A note on shape</span>
+This is a scientific data-processing system, not a transactional web application. Requirement
+areas that a standard SRS template emphasises — accounts, roles, permissions, session
+management — are <strong>deliberately minimal in the MVP</strong>, because the MVP has exactly
+one user class operating a local tool. They are specified here for the deployed service
+variant so the design does not have to be retrofitted later, and each is marked with the
+release it applies to.</div>
+
+<h3>2.2 User roles and permissions</h3>
+<table>
+<tr><th>Role</th><th>Release</th><th>Capabilities</th><th>Restrictions</th></tr>
+<tr><td>Local Operator</td><td>MVP</td>
+    <td>Full: run inference, train, benchmark, view demo, read/write local files</td>
+    <td>None — trusted single user on their own machine</td></tr>
+<tr><td>Viewer</td><td>v2 (service)</td>
+    <td>View products and confidence maps; download COGs; read metrics</td>
+    <td>Cannot submit jobs or modify models</td></tr>
+<tr><td>Analyst</td><td>v2 (service)</td>
+    <td>Viewer plus: submit scenes, choose branches, export reports</td>
+    <td>Cannot retrain or alter model registry</td></tr>
+<tr><td>Administrator</td><td>v2 (service)</td>
+    <td>Analyst plus: manage model registry, quotas, purge products</td>
+    <td>Cannot alter audit logs</td></tr>
+</table>
+
+<h3>2.3 Functional requirements</h3>
+<h4>Ingestion and preprocessing</h4>
+<table>
+<tr><th>ID</th><th>Requirement</th><th>Acceptance test</th></tr>
+<tr><td>FR-1</td><td>Accept a GeoTIFF with exactly 4 bands in order B04, B03, B02, B08</td>
+    <td>A 3-band or 5-band input is rejected with a message naming the expected order</td></tr>
+<tr><td>FR-2</td><td>Convert integer L2A DN to 0–1 reflectance on request
+    (<code>--reflectance</code>)</td>
+    <td>Input with max DN 10000 yields max reflectance 1.0</td></tr>
+<tr><td>FR-3</td><td>Clip reflectance to [0,1]; negative values from atmospheric correction are
+    removed</td><td>No output pixel is negative</td></tr>
+<tr><td>FR-4</td><td>Mask SCL classes 0, 1, 3, 8, 9, 10 when an SCL band is supplied</td>
+    <td>Cloud-flagged pixels are excluded from processing</td></tr>
+<tr><td>FR-5</td><td>Tile inputs of arbitrary size into 128&times;128 with 32&nbsp;px overlap</td>
+    <td>A 1000&times;700 non-square input produces correct 4000&times;2800 output</td></tr>
+<tr><td>FR-6</td><td>Blend overlapping tiles with a Hann window</td>
+    <td>No visible seam along tile boundaries in the output</td></tr>
+</table>
+<h4>Super-resolution</h4>
+<table>
+<tr><th>ID</th><th>Requirement</th><th>Acceptance test</th></tr>
+<tr><td>FR-7</td><td>Provide four selectable branches: bicubic, SEN2SR, LDSR-S2, Ours</td>
+    <td><code>--branches</code> accepts any comma-separated subset</td></tr>
+<tr><td>FR-8</td><td>All branches expose <code>predict(lr) -&gt; Prediction</code></td>
+    <td>A new branch is usable with no change to pipeline or evaluation code</td></tr>
+<tr><td>FR-9</td><td>Upscale by exactly &times;4</td>
+    <td>128&times;128 input yields 512&times;512 output</td></tr>
+<tr><td>FR-10</td><td>LDSR-S2 produces a per-pixel sigma from N stochastic samples</td>
+    <td>With <code>--n-samples 8</code>, sigma is non-zero and varies spatially</td></tr>
+<tr><td>FR-11</td><td>Support CPU, Apple MPS and CUDA</td>
+    <td>Identical output shape on all three; MPS materially faster than CPU</td></tr>
+</table>
+<h4>Trust layer</h4>
+<table>
+<tr><th>ID</th><th>Requirement</th><th>Acceptance test</th></tr>
+<tr><td>FR-12</td><td>Compute LR-consistency by PSF-downsampling the SR output and differencing
+    against the input</td><td>Bicubic scores worse than the hard-constrained branch</td></tr>
+<tr><td>FR-13</td><td>Compute per-pixel spectral angle between input and downsampled output</td>
+    <td>Output is in degrees, finite everywhere</td></tr>
+<tr><td>FR-14</td><td>Compute branch disagreement as normalised difference</td>
+    <td>Zero when both branches agree; bounded in [0,1]</td></tr>
+<tr><td>FR-15</td><td>Fuse available signals into confidence in [0,1]</td>
+    <td>No value outside range; missing signals reweight rather than fail</td></tr>
+<tr><td>FR-16</td><td>Report &Delta;NDVI introduced by super-resolution</td>
+    <td>Mean |&Delta;NDVI| below 0.01 for the fidelity branch</td></tr>
+</table>
+<h4>Output and validation</h4>
+<table>
+<tr><th>ID</th><th>Requirement</th><th>Acceptance test</th></tr>
+<tr><td>FR-17</td><td>Write a 6-band COG: 4 SR bands, sigma, confidence</td>
+    <td><code>gdalinfo</code> reports 6 bands with named descriptions and overviews</td></tr>
+<tr><td>FR-18</td><td>Preserve CRS exactly and rescale the transform so bounds are unchanged</td>
+    <td>Bound drift = 0.0&nbsp;m; pixel size exactly &frac14; of input</td></tr>
+<tr><td>FR-19</td><td>Verify footprint after every write and record the result</td>
+    <td>Metrics JSON contains a <code>footprint.ok</code> field</td></tr>
+<tr><td>FR-20</td><td>Implement Wald's protocol with PSF-based degradation</td>
+    <td>Degradation is not bicubic; documented and configurable</td></tr>
+<tr><td>FR-21</td><td>Report PSNR, SSIM, SAM, ERGAS, RMSE per branch</td>
+    <td>All five present in <code>benchmark.json</code></td></tr>
+<tr><td>FR-22</td><td>Produce a calibration curve binding confidence to observed error</td>
+    <td>Correlation reported; bins include pixel counts</td></tr>
+</table>
+<h4>Training</h4>
+<table>
+<tr><th>ID</th><th>Requirement</th><th>Acceptance test</th></tr>
+<tr><td>FR-23</td><td>Download SEN2VENuS sites with resume support</td>
+    <td>An interrupted download continues from its byte offset</td></tr>
+<tr><td>FR-24</td><td>Pack patches into float16 shards, streamed not buffered</td>
+    <td>Peak memory independent of site size</td></tr>
+<tr><td>FR-25</td><td>Support &times;2 (native) and &times;4 (PSF-degraded input) pairing modes</td>
+    <td>Manifest records which mode produced the shards</td></tr>
+<tr><td>FR-26</td><td>Filter patches on contrast, not zero-fraction</td>
+    <td>Dark-biome sites yield a non-zero usable count</td></tr>
+<tr><td>FR-27</td><td>Checkpoint every epoch and resume model, optimiser, scaler and epoch</td>
+    <td>Kill mid-run; resumed loss continues the prior trajectory</td></tr>
+<tr><td>FR-28</td><td>Optimise L1 + LR-consistency + SAM + gradient with configurable weights</td>
+    <td>Each term is logged separately per epoch</td></tr>
+</table>
+
+<h3>2.4 Business rules</h3>
+<table>
+<tr><th>ID</th><th>Rule</th><th>Rationale</th></tr>
+<tr><td>BR-1</td><td>No super-resolved product may be written without a confidence band</td>
+    <td>Prevents downstream use of sharpened pixels stripped of their caveat</td></tr>
+<tr><td>BR-2</td><td>Geospatial footprint must never change</td>
+    <td>A shifted product silently corrupts every overlay analysis built on it</td></tr>
+<tr><td>BR-3</td><td>Reflectance is never rescaled for aesthetics</td>
+    <td>Contrast stretching is display-only; analysis consumes physical values</td></tr>
+<tr><td>BR-4</td><td>Cloud-flagged pixels are masked before, not after, super-resolution</td>
+    <td>Super-resolving cloud produces convincing, meaningless texture</td></tr>
+<tr><td>BR-5</td><td>Generative-branch output is labelled visual-grade, not analysis-grade</td>
+    <td>Measured: it is the least LR-consistent branch</td></tr>
+<tr><td>BR-6</td><td>Every published metric states its protocol and reference</td>
+    <td>PSNR without a stated degradation is unfalsifiable</td></tr>
+</table>
+
+<h3>2.5 Data requirements</h3>
+<table>
+<tr><th>Entity</th><th>Format</th><th>Key fields</th><th>Volume</th></tr>
+<tr><td>Input scene</td><td>GeoTIFF</td><td>4 bands, CRS, affine transform, 10&nbsp;m</td>
+    <td>~50&nbsp;MB per 2000&times;2000 crop</td></tr>
+<tr><td>Output product</td><td>COG</td><td>6 bands, 2.5&nbsp;m, overviews</td>
+    <td>16&times; input pixels; ~5&nbsp;MB per 512&times;512</td></tr>
+<tr><td>Metrics record</td><td>JSON</td><td>per-branch timings, consistency, trust summary,
+    footprint check</td><td>&lt; 10&nbsp;KB</td></tr>
+<tr><td>Training shard</td><td>NPZ (float16)</td><td><code>lr</code>, <code>hr</code> arrays</td>
+    <td>~400&nbsp;MB per 1000 patches</td></tr>
+<tr><td>Checkpoint</td><td>PyTorch <code>.pt</code></td>
+    <td>model, optimiser, scheduler, scaler, epoch, history</td><td>~7&nbsp;MB</td></tr>
+<tr><td>Manifest</td><td>JSON</td><td>scale, per-site counts, shard names, split sizes</td>
+    <td>&lt; 5&nbsp;KB</td></tr>
+</table>
+
+<h3>2.6 Validation rules</h3>
+<table>
+<tr><th>Input</th><th>Validation</th><th>On failure</th></tr>
+<tr><td>Band count</td><td>Exactly 4</td><td>Reject; state expected order B04/B03/B02/B08</td></tr>
+<tr><td>CRS</td><td>Must be present and projected</td><td>Reject; a geographic CRS makes metre-based PSF meaningless</td></tr>
+<tr><td>Reflectance range</td><td>Within [0,1] after scaling</td><td>Clip and warn</td></tr>
+<tr><td>Raster size</td><td>&ge; 1 pixel; padded up to one tile if smaller</td><td>Reflect-pad</td></tr>
+<tr><td>Branch name</td><td>In {bicubic, sen2sr, ldsr, ours}</td><td>Reject; list valid names</td></tr>
+<tr><td>Checkpoint path</td><td>Exists when <code>ours</code> selected</td><td>Clear message: train first or drop the branch</td></tr>
+<tr><td>Device</td><td>In {cpu, mps, cuda} and available</td><td>Fall back to CPU with a warning</td></tr>
+<tr><td>Training patch</td><td>Finite, contrast &ge; threshold, not saturated</td><td>Skip; count in manifest</td></tr>
+</table>
+
+<h3>2.7 Authentication and authorization</h3>
+<table>
+<tr><th>Release</th><th>Mechanism</th><th>Notes</th></tr>
+<tr><td>MVP</td><td>None — OS file permissions only</td>
+    <td>Single-user local tool. Adding auth would be security theatre with no threat model.</td></tr>
+<tr><td>v2 service</td><td>OAuth2 / OIDC against the hosting institution's identity provider</td>
+    <td>No bespoke password storage; institutions already have SSO</td></tr>
+<tr><td>v2 service</td><td>Role claims mapped to Viewer / Analyst / Administrator</td>
+    <td>Authorisation checked server-side per endpoint, never in the client</td></tr>
+<tr><td>v2 API</td><td>Scoped API tokens, rotatable, per-token rate limits</td>
+    <td>For programmatic batch access</td></tr>
+</table>
+
+<h3>2.8 Error handling and edge cases</h3>
+<table>
+<tr><th>Case</th><th>Behaviour</th></tr>
+<tr><td>Input smaller than one tile</td><td>Reflect-pad to 128&times;128, process, crop back</td></tr>
+<tr><td>Non-square raster</td><td>Handled by custom tiling (the upstream library's helper is
+    known to size output from input width and corrupt this case)</td></tr>
+<tr><td>Fully cloudy scene</td><td>Process, but report cloud fraction and flag the product</td></tr>
+<tr><td>All-zero or flat patch</td><td>Confidence approaches its floor; no crash</td></tr>
+<tr><td>Model checkpoint missing</td><td>Named error identifying which branch and how to fix</td></tr>
+<tr><td>Out of memory on a large scene</td><td>Tiling bounds memory; document a recommended crop size</td></tr>
+<tr><td>Interrupted download</td><td>Resume from byte offset on re-run</td></tr>
+<tr><td>Interrupted training</td><td>Resume from <code>last.pt</code>; at most one epoch lost</td></tr>
+<tr><td>Upstream checkpoint URL changes</td><td>Fetch fails loudly with the attempted URL, not silently</td></tr>
+<tr><td>Corrupt patch inside an archive</td><td>Skip, increment skip counter, continue</td></tr>
+</table>
+
+<h3>2.9 Security requirements</h3>
+<ul>
+<li><strong>No credentials in the repository.</strong> Copernicus access is interactive; no
+API keys are stored.</li>
+<li><strong>Model provenance is pinned.</strong> Weights are fetched from named repositories at
+explicit paths and verified by size; a silently substituted model is a supply-chain risk for a
+system whose output informs decisions.</li>
+<li><strong>Checkpoints are loaded from trusted paths only.</strong> PyTorch deserialisation
+executes code; loading an untrusted <code>.pt</code> is remote code execution.</li>
+<li><strong>Uploaded rasters are treated as untrusted input</strong> — validated for band
+count, CRS and size before any processing.</li>
+<li><strong>v2 service:</strong> TLS in transit, encryption at rest, per-user product
+isolation, audit log of every job submission and download.</li>
+</ul>
+
+<h3>2.10 Performance requirements</h3>
+<table>
+<tr><th>Operation</th><th>Target</th><th>Measured</th></tr>
+<tr><td>Fidelity branch, 128&times;128 tile</td><td>&lt; 1&nbsp;s</td><td class="good">40&nbsp;ms (CPU)</td></tr>
+<tr><td>Our model, 128&times;128 tile</td><td>&lt; 1&nbsp;s</td><td class="good">20&nbsp;ms (CPU)</td></tr>
+<tr><td>Diffusion branch, 8 samples</td><td>Batch use only</td><td>~100&nbsp;s (CPU)</td></tr>
+<tr><td>Training epoch, 5400 patches</td><td>&lt; 2&nbsp;min</td><td class="good">33&nbsp;s (MPS)</td></tr>
+<tr><td>Full 40-epoch run</td><td>&lt; 1&nbsp;h</td><td class="good">22&nbsp;min (MPS)</td></tr>
+<tr><td>Dataset build, 6000 patches</td><td>&lt; 10&nbsp;min</td><td class="good">~4&nbsp;min</td></tr>
+<tr><td>Demo page load</td><td>&lt; 3&nbsp;s</td><td class="good">Sub-second (cached)</td></tr>
+<tr><td>Peak memory, dataset build</td><td>Independent of site size</td><td class="good">Bounded by shard size</td></tr>
+</table>
+
+<h3>2.11 Acceptance criteria</h3>
+<ol>
+<li>All FR-1 to FR-28 pass their stated acceptance tests.</li>
+<li>Business rules BR-1 to BR-6 hold for every product the system emits.</li>
+<li>Every validation rule produces a named, actionable error rather than a stack trace.</li>
+<li>Every edge case in 2.8 is exercised at least once and does not crash the pipeline.</li>
+<li>Performance targets in 2.10 are met on the reference hardware.</li>
+</ol>
+
+<h2 class="pb">3. System Architecture Document</h2>
+
+<h3>3.1 Architectural principles</h3>
+<div class="box"><span class="t">Deliberately not a microservice platform</span>
+The MVP is a Python library with a thin UI. There is no database, no message queue, no
+container orchestration and no API gateway, because there is no requirement that needs them:
+one user, local files, batch processing. Every component below earns its place by serving a
+stated requirement. The v2 service design is included so the boundaries are right from the
+start — but it is explicitly <em>not built yet</em>.</div>
+<ul>
+<li><strong>Files are the interface.</strong> GeoTIFF in, COG out. Any GIS tool, any language,
+no client library required.</li>
+<li><strong>One interface for all models.</strong> Adding a branch touches no other component.</li>
+<li><strong>Uncertainty travels with the data</strong>, inside the same file, not in a sidecar
+that can be lost.</li>
+<li><strong>Everything regenerates from source</strong> — products, metrics and documentation.</li>
+</ul>
+
+<h3>3.2 Technology stack</h3>
+<table>
+<tr><th>Layer</th><th>Choice</th><th>Why this and not the obvious alternative</th></tr>
+<tr><td>Language</td><td>Python 3.12</td>
+    <td>The entire geospatial and ML ecosystem is here; 3.12 is required by <code>opensr-model</code></td></tr>
+<tr><td>ML framework</td><td>PyTorch 2.13</td>
+    <td>Both pretrained model families ship PyTorch weights; MPS support makes local training viable</td></tr>
+<tr><td>Geospatial I/O</td><td>rasterio + rioxarray (GDAL)</td>
+    <td>Correct CRS/affine handling and native COG writing; hand-rolling GeoTIFF is a footgun</td></tr>
+<tr><td>Fidelity model</td><td>SEN2SR (SPAN CNN, 472k params)</td>
+    <td>Hard radiometric constraint built in; CC0; peer-reviewed (RSE 2025)</td></tr>
+<tr><td>Generative model</td><td>LDSR-S2 latent diffusion (169M)</td>
+    <td>Native per-pixel uncertainty via sampling — the PS requirement, off the shelf</td></tr>
+<tr><td>Our model</td><td>SPAN CNN fine-tuned</td>
+    <td>Warm start converges in minutes on free compute; a from-scratch transformer would not converge in the schedule</td></tr>
+<tr><td>Frontend</td><td>Streamlit</td>
+    <td>A React SPA would consume the whole build budget and add no capability; the UI is a viewer, not an application</td></tr>
+<tr><td>Packaging</td><td>uv + pyproject</td>
+    <td>Resolves and installs an order of magnitude faster than pip on this dependency tree</td></tr>
+<tr><td>Docs</td><td>HTML &rarr; headless Chrome &rarr; PDF</td>
+    <td>Regenerates from source; no LaTeX toolchain to install</td></tr>
+</table>
+
+<h3>3.3 Component diagram</h3>
+<pre>
+                        +---------------------------+
+                        |   app/demo.py (Streamlit) |   viewer only; reads products
+                        +-------------+-------------+
+                                      | reads
+  scripts/ ---------------------------+------------------------------------+
+   run_inference.py  evaluate.py  train.py  build_dataset.py  fetch_*.py    |
+        |                |            |            |              |        |
+  ======|================|============|============|==============|========|=====
+        v                v            v            v              v        v
+  +-----------------------------------------------------------------------------+
+  |  src/srm/  — the library. No UI, no CLI, no I/O side effects beyond io/      |
+  +-----------------------------------------------------------------------------+
+   preprocess/     models/           trust/          validate/      train/
+   - SCL mask      - base (iface)    - psf_downsample - wald         - losses
+   - tiling        - bicubic         - lr_consistency - consistency  - dataset
+   - hann window   - sen2sr          - spectral angle - calibration  - model
+                   - ldsr (+sigma)   - disagreement
+                   - ours            - confidence
+                   - tiling
+                        |                                            |
+                        v                                            v
+                   metrics/  PSNR SSIM SAM ERGAS            io/  COG write,
+                                                                 CRS preserve,
+                                                                 footprint check
+</pre>
+
+<h3>3.4 Data flow</h3>
+<pre>
+ [Copernicus Data Space]           [Zenodo: SEN2VENuS]
+          |                                  |
+   S2 L2A GeoTIFF                    site archives (nested zip)
+          |                                  |
+          v                                  v
+   preprocess: SCL mask, scale,      build_dataset: pair, PSF-degrade
+   tile 128 w/ 32 overlap            filter on contrast, shard float16
+          |                                  |
+          v                                  v
+   +--------------+                   train: L1 + consistency + SAM + grad
+   |  4 branches  |<--- checkpoints ---  checkpoint every epoch (resumable)
+   +--------------+
+          |
+          v
+   trust layer: consistency | SAM | disagreement | sigma  ->  confidence
+          |
+          +--------> validate: Wald protocol, calibration  -> benchmark.json
+          |
+          v
+   io: COG writer  ->  6-band product (4 SR + sigma + confidence)
+          |                     + footprint verification
+          v
+   [ QGIS / ArcGIS ]   [ Streamlit demo ]   [ downstream: NDVI, edges, change ]
+</pre>
+
+<h3>3.5 Component responsibilities</h3>
+<table>
+<tr><th>Component</th><th>Responsibility</th><th>Does not</th></tr>
+<tr><td><code>preprocess/</code></td><td>Masking, scaling, tile geometry, blend weights</td>
+    <td>Know about models</td></tr>
+<tr><td><code>models/</code></td><td>Wrap each model behind <code>predict()</code>; tiled inference</td>
+    <td>Write files or compute metrics</td></tr>
+<tr><td><code>trust/</code></td><td>All uncertainty signals and their fusion</td>
+    <td>Depend on any specific model</td></tr>
+<tr><td><code>validate/</code></td><td>Wald protocol, consistency check, calibration</td>
+    <td>Depend on the UI</td></tr>
+<tr><td><code>metrics/</code></td><td>Reflectance-aware PSNR/SSIM/SAM/ERGAS</td>
+    <td>Assume 8-bit ranges</td></tr>
+<tr><td><code>io/</code></td><td>COG write, CRS/transform preservation, footprint verification</td>
+    <td>Contain science logic</td></tr>
+<tr><td><code>train/</code></td><td>Losses, shard dataset, model construction</td>
+    <td>Run inference pipelines</td></tr>
+<tr><td><code>pipeline.py</code></td><td>Orchestrate branches &rarr; trust &rarr; product</td>
+    <td>Implement any of them</td></tr>
+</table>
+
+<h3>3.6 Storage</h3>
+<table>
+<tr><th>Path</th><th>Contents</th><th>Lifecycle</th></tr>
+<tr><td><code>data/raw/</code></td><td>Input scenes, SEN2VENuS archives</td><td>Git-ignored; large</td></tr>
+<tr><td><code>data/interim/</code></td><td>Packed training shards</td><td>Regenerable</td></tr>
+<tr><td><code>data/outputs/</code></td><td>Products and metrics JSON</td><td>Regenerable</td></tr>
+<tr><td><code>models/</code></td><td>Downloaded pretrained weights (~2.1&nbsp;GB)</td><td>Git-ignored; re-fetchable</td></tr>
+<tr><td><code>checkpoints/</code></td><td>Our trained model + history</td><td>The one artefact worth backing up</td></tr>
+<tr><td><code>docs/</code></td><td>HTML sources and rendered PDFs</td><td>Version controlled</td></tr>
+</table>
+<p>No database in the MVP. Product metadata lives in per-product JSON beside the raster,
+which keeps a product self-describing and portable — the file <em>is</em> the record.</p>
+
+<h3>3.7 Security architecture</h3>
+<table>
+<tr><th>Concern</th><th>MVP control</th><th>v2 service control</th></tr>
+<tr><td>Input trust</td><td>Band/CRS/size validation before processing</td><td>Same, plus size quotas</td></tr>
+<tr><td>Model provenance</td><td>Pinned URLs, explicit paths, size check</td><td>Signed model registry with hashes</td></tr>
+<tr><td>Deserialisation</td><td>Load checkpoints only from local trusted paths</td><td>Registry-signed weights only</td></tr>
+<tr><td>Secrets</td><td>None stored</td><td>Vault/KMS; no secrets in images</td></tr>
+<tr><td>Transport</td><td>Local only</td><td>TLS 1.3</td></tr>
+<tr><td>Isolation</td><td>OS user</td><td>Per-tenant object-storage prefixes</td></tr>
+<tr><td>Auditability</td><td>Metrics JSON records provenance per product</td><td>Append-only job/download audit log</td></tr>
+</table>
+
+<h3>3.8 Deployment</h3>
+<table>
+<tr><th>Target</th><th>How</th><th>When</th></tr>
+<tr><td>Local workstation</td><td><code>uv venv</code> + <code>uv pip install -e .</code>; MPS/CPU</td>
+    <td>MVP — this is the delivered form</td></tr>
+<tr><td>Free Colab / Kaggle</td><td>Notebook clones the repo, checkpoints to Drive</td>
+    <td>MVP — training on borrowed GPUs</td></tr>
+<tr><td>Institutional GPU server</td><td>Same package, <code>--device cuda</code></td>
+    <td>v1.1 — larger training runs</td></tr>
+<tr><td>Containerised batch service</td><td>Docker image, object storage, job queue</td>
+    <td>v2 — only when a second user exists</td></tr>
+</table>
+
+<h3>3.9 Monitoring and observability</h3>
+<table>
+<tr><th>Signal</th><th>Where</th><th>Why it matters</th></tr>
+<tr><td>Per-branch runtime</td><td>Metrics JSON</td><td>Detects a branch silently falling back to CPU</td></tr>
+<tr><td>LR-consistency per product</td><td>Metrics JSON</td>
+    <td><strong>Needs no ground truth</strong> — the one quality signal available in production</td></tr>
+<tr><td>Mean confidence, low-confidence fraction</td><td>Metrics JSON</td>
+    <td>A sudden drop indicates out-of-distribution input</td></tr>
+<tr><td>Footprint check</td><td>Metrics JSON</td><td>Catches georeferencing regressions immediately</td></tr>
+<tr><td>Training loss components</td><td><code>history.json</code></td>
+    <td>Separately logged so a diverging term is visible, not hidden in a total</td></tr>
+<tr><td>Skipped-patch count</td><td>Manifest</td><td>A spike means a bad filter or corrupt archive</td></tr>
+</table>
+<div class="box"><span class="t">The production quality signal</span>
+LR-consistency is the architecturally important metric: it compares the product against its
+own input, so it runs on every real scene where no ground truth exists. It is the difference
+between a system that was validated once and a system that reports its own health continuously.</div>
+
+<h3>3.10 Scalability</h3>
+<table>
+<tr><th>Dimension</th><th>Current limit</th><th>Path forward</th></tr>
+<tr><td>Scene size</td><td>Memory-bounded by tiling; ~2000&times;2000 comfortable</td>
+    <td>Windowed read/write via rasterio for full 10980&sup2; tiles</td></tr>
+<tr><td>Throughput</td><td>One scene at a time</td>
+    <td>Tiles are independent — embarrassingly parallel across processes or nodes</td></tr>
+<tr><td>Model size</td><td>472k params, CPU-viable</td>
+    <td>Larger backbones only if benchmarks justify the cost</td></tr>
+<tr><td>Training data</td><td>6000 patches, 2.3&nbsp;GB</td>
+    <td>Streaming shards already support arbitrary site counts</td></tr>
+<tr><td>Users</td><td>One</td><td>v2 service with a job queue — deferred until a second user exists</td></tr>
+</table>
+
+<h2 class="pb">4. UI/UX Specification</h2>
+
+<h3>4.1 Design principles</h3>
+<table>
+<tr><th>Principle</th><th>What it means here</th></tr>
+<tr><td><strong>Uncertainty is not an advanced feature</strong></td>
+    <td>Confidence is surfaced on the main screen, not buried in a settings panel. The whole
+    product claim depends on it being seen.</td></tr>
+<tr><td><strong>The comparison is the interface</strong></td>
+    <td>A super-resolved image alone means nothing. Every view shows before and after together.</td></tr>
+<tr><td><strong>Never let a demo depend on the network</strong></td>
+    <td>The app reads precomputed products. No model call, no download, no API during a
+    presentation.</td></tr>
+<tr><td><strong>Honest visuals</strong></td>
+    <td>Contrast stretching is labelled display-only. The UI never makes output look better
+    than the data supports.</td></tr>
+<tr><td><strong>No decoration</strong></td>
+    <td>No splash screens, no animation, no gradients. Every pixel of chrome competes with the
+    imagery the user came to see.</td></tr>
+</table>
+
+<h3>4.2 User journeys</h3>
+<h4>Journey A — Officer evaluating an area (primary demo path)</h4>
+<pre>
+ open app -> product already selected -> IMAGERY tab
+    |  sees 10 m and 2.5 m side by side; reads the inference disclaimer
+    v
+ TRUST tab -> confidence map + red overlay; drags threshold slider
+    |  understands which sharpened detail is supported
+    v
+ NDVI tab -> field boundaries sharper, NDVI mean shift ~0
+    |  confirms the vegetation signal did not move
+    v
+ decision: "this is usable for my district"      [~90 seconds, no GIS skill]
+</pre>
+<h4>Journey B — Analyst producing a product</h4>
+<pre>
+ CLI: run_inference.py --input scene.tif --branches sen2sr,ldsr
+    -> product.tif (6 bands) + metrics.json
+    -> open in QGIS, overlay on existing layers, confirm alignment
+    -> read metrics.json: consistency, footprint.ok, trust summary
+    -> cite figures in report
+</pre>
+<h4>Journey C — Researcher benchmarking</h4>
+<pre>
+ evaluate.py --branches bicubic,sen2sr,ours
+    -> metric table + calibration curve printed and written to JSON
+    -> METRICS tab in app renders the same numbers for presentation
+</pre>
+
+<h3>4.3 Navigation and screens</h3>
+<p>Flat, four-tab structure. No nesting, no modals, no routing — the entire app is one screen
+with four views of the same product.</p>
+<pre>
+ +----------------------------------------------------------------------+
+ | SIDEBAR          |  Deep Learning Super-Resolution Mapping            |
+ |                  |  Sentinel-2 10 m -> 2.5 m with per-pixel trust     |
+ | Product [v]      |                                                    |
+ |                  |  [Mean confidence]  [Low-conf area]  [Footprint]   |
+ | CRS  EPSG:32643  |      0.805              2.7%             yes       |
+ | Pixel  2.5 m     |                                                    |
+ | Bands  6         |  ( Imagery | Trust layer | NDVI | Metrics )        |
+ |                  |  ------------------------------------------------  |
+ |                  |                                                    |
+ |                  |            [ tab content ]                         |
+ +----------------------------------------------------------------------+
+</pre>
+<table>
+<tr><th>Screen</th><th>Content</th><th>Primary action</th></tr>
+<tr><td>Header</td><td>Title, subtitle, three KPI tiles</td><td>Orientation at a glance</td></tr>
+<tr><td>Imagery</td><td>Input (10&nbsp;m) and output (2.5&nbsp;m) side by side; inference
+    disclaimer</td><td>Visual comparison</td></tr>
+<tr><td>Trust layer</td><td>Confidence map; SR image with sub-threshold pixels in red;
+    threshold slider</td><td>Judge reliability</td></tr>
+<tr><td>NDVI</td><td>NDVI before/after; mean-shift metric</td><td>Verify spectral integrity</td></tr>
+<tr><td>Metrics</td><td>Wald table; calibration bar chart; per-branch consistency JSON</td>
+    <td>Defend the result</td></tr>
+</table>
+
+<h3>4.4 Key interactions</h3>
+<table>
+<tr><th>Interaction</th><th>Behaviour</th><th>Rationale</th></tr>
+<tr><td>Product selector</td><td>Dropdown of every COG in <code>data/outputs/</code>;
+    reloads all tabs</td><td>Fast switching between demo areas</td></tr>
+<tr><td>Confidence threshold slider</td><td>0.00–1.00, step 0.05; red overlay and the
+    percentage caption update live</td>
+    <td>Lets a sceptical viewer set their own bar rather than trusting ours</td></tr>
+<tr><td>Tab switching</td><td>Instant; state cached</td><td>No spinner between views</td></tr>
+<tr><td>Image display</td><td>2–98 percentile stretch, labelled display-only</td>
+    <td>Dark scenes are unreadable unstretched; the label prevents misreading</td></tr>
+</table>
+
+<h3>4.5 States</h3>
+<table>
+<tr><th>State</th><th>Trigger</th><th>What the user sees</th></tr>
+<tr><td>Empty</td><td>No products in <code>data/outputs/</code></td>
+    <td>&ldquo;No products found. Run <code>python scripts/run_inference.py</code> first.&rdquo;
+    — names the exact command</td></tr>
+<tr><td>Loading</td><td>First read of a large COG</td><td>Spinner; results cached thereafter</td></tr>
+<tr><td>Partial</td><td>Product has no confidence band</td>
+    <td>Trust tab shows a warning instead of failing; other tabs work</td></tr>
+<tr><td>Partial</td><td>No benchmark JSON present</td><td>Metrics tab hides the table, keeps consistency</td></tr>
+<tr><td>Error</td><td>Corrupt or unreadable raster</td><td>Named error identifying the file</td></tr>
+<tr><td>Nominal</td><td>Everything present</td><td>All four tabs populated</td></tr>
+</table>
+
+<h3>4.6 Visual design system</h3>
+<table>
+<tr><th>Token</th><th>Value</th><th>Use</th></tr>
+<tr><td>Primary</td><td><code>#16506b</code> deep teal-blue</td><td>Headers, table headers, accents</td></tr>
+<tr><td>Alert</td><td><code>#ff0000</code> pure red</td><td>Low-confidence overlay only — reserved, never decorative</td></tr>
+<tr><td>Success</td><td><code>#1d7a3e</code></td><td>Passing metrics</td></tr>
+<tr><td>Warning</td><td><code>#96650d</code> on <code>#fdf6ec</code></td><td>Caveats and scope warnings</td></tr>
+<tr><td>Surface</td><td><code>#f7f9fa</code> / <code>#f4f8fa</code></td><td>Code blocks, callouts</td></tr>
+<tr><td>Body text</td><td><code>#1a1a1a</code></td><td>Maximum legibility on projectors</td></tr>
+<tr><td>Type</td><td>System sans; monospace for paths and numbers</td>
+    <td>Tabular figures so metric columns align</td></tr>
+<tr><td>Spacing</td><td>4&nbsp;px base scale</td><td>Consistent rhythm</td></tr>
+</table>
+
+<h3>4.7 Responsive behaviour</h3>
+<table>
+<tr><th>Viewport</th><th>Layout</th></tr>
+<tr><td>&ge; 1200&nbsp;px (demo projector)</td><td>Two-column image comparison, sidebar expanded — the target</td></tr>
+<tr><td>768–1199&nbsp;px (laptop)</td><td>Columns narrow; images scale to container width</td></tr>
+<tr><td>&lt; 768&nbsp;px (tablet)</td><td>Columns stack vertically; sidebar collapses to a drawer</td></tr>
+<tr><td>Wide tables</td><td>Horizontal scroll within their own container; the page never scrolls sideways</td></tr>
+</table>
+
+<h3>4.8 Accessibility</h3>
+<ul>
+<li><strong>Never colour alone.</strong> Low-confidence regions carry a numeric percentage
+caption as well as the red overlay — essential given red/green colour-vision deficiency
+affects roughly 8% of men.</li>
+<li>Body text contrast &ge; 4.5:1; the primary colour on white measures ~8.6:1.</li>
+<li>All controls keyboard reachable; the threshold slider is arrow-key adjustable.</li>
+<li>Every image carries a descriptive caption stating resolution and content.</li>
+<li>Metric tables are real tables with headers, not images — screen-reader navigable.</li>
+<li>Confidence rendered as greyscale intensity, legible without colour perception.</li>
+</ul>
+
+<h2 class="pb">5. Development Plan</h2>
+
+<h3>5.1 Roadmap overview</h3>
+<pre>
+  M0  Foundation        [DONE]   repo, env, geospatial I/O, metrics
+  M1  Pipeline MVP      [DONE]   4 branches, trust layer, COG product, demo
+  M2  Own model         [DONE]   SEN2VENuS ingest, training, benchmark
+  M3  Validation depth  [NEXT]   downstream tasks, India reference, ablations
+  M4  Hardening                  full-tile inference, tests, packaging
+  M5  Service (v2)               API, queue, auth — only if a second user appears
+</pre>
+
+<h3>5.2 Completed work</h3>
+<table>
+<tr><th>Milestone</th><th>Delivered</th><th>Evidence</th></tr>
+<tr><td>M0</td><td>Python 3.12 env, package layout, COG writer with CRS preservation,
+    reflectance-aware metrics</td><td>Footprint drift measured at 0.00&nbsp;m</td></tr>
+<tr><td>M1</td><td>Preprocessing, four-branch interface, Hann-feathered tiling, trust layer,
+    Wald validation, Streamlit demo</td>
+    <td>Calibration r = &minus;0.38; error falls 4&times; across confidence bins</td></tr>
+<tr><td>M2</td><td>SEN2VENuS fetch/pack/train, custom loss, our benchmarked model</td>
+    <td>5,400 KUDALIAR patches; val PSNR 39.23&nbsp;dB; best SSIM and SAM on the reference tile</td></tr>
+</table>
+
+<h3>5.3 Remaining work</h3>
+<h4>M3 — Validation depth <span class="p1">P0</span></h4>
+<table>
+<tr><th>Task</th><th>Depends on</th><th>Definition of Done</th></tr>
+<tr><td>Downstream task evaluation: NDVI field-boundary and building-edge delineation on
+    LR vs SR</td><td>M1</td>
+    <td>A quantified gain (IoU or boundary F1) reported for at least one task, or an honest
+    null result</td></tr>
+<tr><td>India reference validation against Bhoonidhi LISS-IV (5.8&nbsp;m)</td><td>M2</td>
+    <td>&ge; 2 overlapping AOIs compared; agreement reported with the acquisition gap stated</td></tr>
+<tr><td>LDSR-S2 included in the full benchmark</td><td>M2</td>
+    <td>Four-branch table with sigma-based uncertainty in the comparison</td></tr>
+<tr><td>Multi-site training run (add ANJI, MAD-AMBO, SUDOUE-4, ESTUAMAR)</td><td>M2</td>
+    <td>Benchmarked against the KUDALIAR-only model; generalisation gap quantified</td></tr>
+<tr><td>Loss ablation (drop consistency / SAM / gradient in turn)</td><td>M2</td>
+    <td>Table showing each term's contribution — turns a design claim into evidence</td></tr>
+</table>
+<h4>M4 — Hardening <span class="p2">P1</span></h4>
+<table>
+<tr><th>Task</th><th>Depends on</th><th>Definition of Done</th></tr>
+<tr><td>Windowed full-tile inference</td><td>M1</td>
+    <td>A full 10980&sup2; Sentinel-2 tile processes without exhausting memory</td></tr>
+<tr><td>Automated test suite</td><td>M1</td>
+    <td>Tests cover footprint preservation, band-order validation, tiling on non-square input,
+    resume correctness; all pass in CI</td></tr>
+<tr><td>Copernicus fetch by AOI</td><td>M1</td>
+    <td>Bounding box + date range yields an analysis-ready 4-band stack</td></tr>
+<tr><td>Cloud masking wired into the CLI end to end</td><td>M1</td>
+    <td>Scene with SCL produces a masked product and a reported cloud fraction</td></tr>
+<tr><td>Reproducible environment lock</td><td>M0</td>
+    <td>A clean machine reproduces the benchmark numbers from the lockfile</td></tr>
+</table>
+<h4>M5 — Service <span class="p3">P2, conditional</span></h4>
+<table>
+<tr><th>Task</th><th>Trigger</th><th>Definition of Done</th></tr>
+<tr><td>REST API, job queue, object storage</td><td>A second concurrent user exists</td>
+    <td>Submit a scene, poll status, download product</td></tr>
+<tr><td>OIDC auth and role mapping</td><td>Multi-user deployment</td>
+    <td>Viewer/Analyst/Administrator enforced server-side</td></tr>
+<tr><td>Containerisation and deployment</td><td>Institutional hosting agreed</td>
+    <td>One-command deploy; health endpoint; audit log</td></tr>
+</table>
+
+<h3>5.4 Dependencies</h3>
+<pre>
+  M0 foundation
+     |
+     +--> M1 pipeline ------+--> M3 validation depth ---> publishable result
+     |                      |
+     +--> M2 own model -----+--> M4 hardening ----------> operational tool
+                                      |
+                                      +--> M5 service (conditional)
+</pre>
+<table>
+<tr><th>Dependency</th><th>Type</th><th>Risk if it fails</th></tr>
+<tr><td>Copernicus Data Space</td><td>External</td><td>No new input scenes; existing demo unaffected</td></tr>
+<tr><td>Zenodo (SEN2VENuS)</td><td>External</td><td>Cannot retrain; already downloaded locally</td></tr>
+<tr><td>HuggingFace model weights</td><td>External</td><td>Pretrained branches unavailable; already cached</td></tr>
+<tr><td>Bhoonidhi / NRSC</td><td>External</td><td>India reference validation deferred — the only blocking dependency in M3</td></tr>
+<tr><td><code>sen2sr</code>, <code>opensr-model</code></td><td>Library</td>
+    <td>Version churn; mitigated by pinning (a stale checkpoint URL has already been hit once)</td></tr>
+</table>
+
+<h3>5.5 Definition of Done</h3>
+<div class="box"><span class="t">A task is done when all of these hold</span></div>
+<table>
+<tr><th>#</th><th>Criterion</th></tr>
+<tr><td>1</td><td>The code runs end to end from the project root on a clean environment</td></tr>
+<tr><td>2</td><td>It is exercised on real data, not only synthetic — a passing test on
+    constructed input proves nothing about a satellite scene</td></tr>
+<tr><td>3</td><td>Any geospatial output passes <code>check_footprint()</code> with zero drift</td></tr>
+<tr><td>4</td><td>Any quality claim is backed by a number produced by <code>evaluate.py</code>,
+    with the protocol stated</td></tr>
+<tr><td>5</td><td>Failure modes produce named, actionable errors — never a bare traceback</td></tr>
+<tr><td>6</td><td>Non-obvious decisions are explained in a comment answering <em>why</em>, not
+    restating <em>what</em></td></tr>
+<tr><td>7</td><td>README or QUICKSTART is updated if the user-facing surface changed</td></tr>
+<tr><td>8</td><td>Committed with a message explaining the reasoning, not just the diff</td></tr>
+<tr><td>9</td><td>Negative results are reported as prominently as positive ones</td></tr>
+</table>
+
+<h3>5.6 Priorities if time runs short</h3>
+<table>
+<tr><th>Rank</th><th>Work</th><th>Why this order</th></tr>
+<tr><td>1</td><td>Downstream task evaluation</td>
+    <td>Converts &ldquo;PSNR improved&rdquo; into &ldquo;the analysis got better&rdquo; — the
+    single most persuasive evidence available</td></tr>
+<tr><td>2</td><td>Loss ablation</td>
+    <td>Cheap (hours), and turns the loss design from an assertion into a finding</td></tr>
+<tr><td>3</td><td>LDSR in the full benchmark</td><td>Completes the four-branch story</td></tr>
+<tr><td>4</td><td>Multi-site training</td><td>Tests the generalisation claim directly</td></tr>
+<tr><td>5</td><td>India reference validation</td>
+    <td>Highest credibility value, but gated on external data access</td></tr>
+<tr><td>6</td><td>Full-tile inference</td><td>Engineering, not science; defer if time is tight</td></tr>
+</table>
+
+<h3>5.7 Current status summary</h3>
+<table>
+<tr><th>Area</th><th>State</th><th>Evidence</th></tr>
+<tr><td>Pipeline</td><td class="good">Complete</td><td>Four branches, end to end, verified</td></tr>
+<tr><td>Trust layer</td><td class="good">Complete and calibrated</td>
+    <td>r = &minus;0.38; error 0.0366 &rarr; 0.0087 across bins</td></tr>
+<tr><td>Geospatial integrity</td><td class="good">Verified</td><td>0.00&nbsp;m drift on every product</td></tr>
+<tr><td>Own model</td><td class="good">Trained and benchmarked</td>
+    <td>Best SSIM (0.8346) and SAM (1.845&deg;) of three branches</td></tr>
+<tr><td>Demo</td><td class="good">Working offline</td><td>Four tabs, precomputed products</td></tr>
+<tr><td>Documentation</td><td class="good">Generated from source</td><td>Pipeline doc + this set</td></tr>
+<tr><td>Downstream evaluation</td><td>Not started</td><td>Highest-value remaining work</td></tr>
+<tr><td>India reference validation</td><td>Not started</td><td>Gated on Bhoonidhi access</td></tr>
+<tr><td>Test suite</td><td>Not started</td><td>Manual verification only so far</td></tr>
+</table>
+
+<h3>5.8 Headline results to date</h3>
+<table>
+<tr><th>Branch</th><th class="num">PSNR</th><th class="num">SSIM</th><th class="num">SAM&deg;</th>
+    <th class="num">ERGAS</th><th class="num">Time</th></tr>
+<tr><td>Bicubic</td><td class="num">32.68</td><td class="num">0.7965</td><td class="num">2.025</td>
+    <td class="num">3.735</td><td class="num">1&nbsp;ms</td></tr>
+<tr><td>SEN2SR</td><td class="num"><span class="good">33.21</span></td><td class="num">0.8194</td>
+    <td class="num">1.904</td><td class="num"><span class="good">3.500</span></td><td class="num">40&nbsp;ms</td></tr>
+<tr><td><strong>Ours</strong></td><td class="num">31.57</td>
+    <td class="num"><span class="good">0.8346</span></td>
+    <td class="num"><span class="good">1.845</span></td>
+    <td class="num">4.069</td><td class="num">20&nbsp;ms</td></tr>
+</table>
+<div class="box warn"><span class="t">How to state this honestly</span>
+Our model achieves the <strong>best structural (SSIM) and spectral (SAM) fidelity</strong> of
+the three branches, trading raw PSNR for the properties that matter in remote sensing — which
+is exactly what its loss function optimises. It does <em>not</em> beat SEN2SR on PSNR or
+ERGAS, and we do not claim it does.
+<br><br>
+Two caveats to state before a reviewer raises them. First, this evaluation tile is European,
+while our model was trained only on Indian terrain (KUDALIAR) — it is being tested
+out-of-domain and still leads on two of four metrics. Second, PSNR is a per-pixel L2 measure
+and is well known to correlate weakly with interpretability; SSIM and SAM are the metrics a
+remote-sensing reviewer weighs. On its own KUDALIAR validation split the model reaches
+39.23&nbsp;dB PSNR and 0.9524 SSIM.</div>
+
+<footer>Team Sutram · Smart India Hackathon · Product Documentation Set · Generated
+24 August 2026 from the project repository. Regenerate with headless Chrome from
+<code>docs/product_docs.html</code>. All figures are measured values from
+<code>scripts/evaluate.py</code>, not estimates.</footer>
+
+</body></html>
