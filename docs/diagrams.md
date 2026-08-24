@@ -67,6 +67,10 @@ flowchart TB
 This is the design decision that makes the system extensible: every model implements one
 interface, so the pipeline, trust layer and evaluation harness need no special-casing.
 
+Note the `<<module>>` stereotypes: `pipeline` and `trust.layer` are Python modules of
+functions, not classes. Drawing them as classes would send a reviewer looking for types that
+do not exist in the source.
+
 ```mermaid
 classDiagram
     class SRBranch {
@@ -75,57 +79,64 @@ classDiagram
         +int scale
         +predict(lr: ndarray) Prediction*
     }
-
     class Prediction {
+        <<dataclass>>
         +ndarray sr
         +ndarray~None~ sigma
         +str name
         +float seconds
-        +has_uncertainty() bool
+        +/has_uncertainty bool
     }
-
     class BicubicBranch {
         +str name = "bicubic"
+        +int scale
         +predict(lr) Prediction
     }
-
     class Sen2SRBranch {
         -Module model
-        -str device
+        -ModelLoader _loader
+        +str device
         +str name = "SEN2SR"
         -_infer_tile(patch) ndarray
         +predict(lr) Prediction
     }
-
     class LdsrBranch {
         -SRLatentDiffusion model
-        -int n_samples
-        -int steps
+        +str device
+        +int n_samples
+        +int steps
         +str name = "LDSR-S2"
         +predict(lr) Prediction
     }
-
     class OursBranch {
         -Module model
-        -int epoch
-        -float val_psnr
+        +str device
+        +int epoch
+        +float val_psnr
         +str name = "Ours"
         -_infer_tile(patch) ndarray
         +predict(lr) Prediction
     }
-
-    class TrustLayer {
-        +psf_downsample(sr, scale) ndarray
-        +lr_consistency(sr, lr) ndarray
-        +sam_consistency(sr, lr) ndarray
-        +branch_disagreement(a, b) ndarray
-        +confidence_map(...) dict
+    class pipeline {
+        <<module>>
+        +run(lr, branches, scale, fidelity, generative) dict
+        +write_product(out_path, result, src_profile, scale) dict
+        +write_metrics(out_path, result) Path
     }
-
-    class Pipeline {
-        +run(lr, branches) dict
-        +write_product(path, result) dict
-        +write_metrics(path, result) Path
+    class trust_layer {
+        <<module>>
+        +psf_downsample(sr, scale, sigma) ndarray
+        +lr_consistency(sr, lr, scale) ndarray
+        +spectral_angle_map(a, b) ndarray
+        +sam_consistency(sr, lr, scale) ndarray
+        +ndvi(arr, red_idx, nir_idx) ndarray
+        +delta_ndvi(sr, lr, scale) ndarray
+        +branch_disagreement(sr_a, sr_b) ndarray
+        +confidence_map(sr, lr, scale, sigma, other_branch) dict
+    }
+    class tiling {
+        <<module>>
+        +tiled_predict(lr, fn, tile, overlap, scale) ndarray
     }
 
     SRBranch <|-- BicubicBranch
@@ -133,9 +144,11 @@ classDiagram
     SRBranch <|-- LdsrBranch
     SRBranch <|-- OursBranch
     SRBranch ..> Prediction : returns
-    Pipeline o-- SRBranch : orchestrates
-    Pipeline ..> TrustLayer : fuses via
     LdsrBranch ..> Prediction : populates sigma
+    pipeline ..> SRBranch : invokes
+    pipeline ..> trust_layer : fuses via
+    Sen2SRBranch ..> tiling : uses
+    OursBranch ..> tiling : uses
 ```
 
 ---
