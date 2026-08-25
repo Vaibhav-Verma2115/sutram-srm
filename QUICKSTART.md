@@ -23,8 +23,23 @@ The examples below use the prefix form so they work in a fresh terminal.
 | Interface | Purpose | Needs a server? |
 |-----------|---------|-----------------|
 | **`docs/judge_demo.html`** | **Judges / presentation.** Swipe slider, 4 scenes, confidence overlay. Fully self-contained. | **No — just open it** |
+| **`app/superresolve.py`** | **Upload your own scene** → 2.5 m output + GeoTIFF download. | Streamlit |
 | `app/demo.py` | Product browser. Reads precomputed GeoTIFFs, four analysis tabs. | Streamlit |
-| `app/testbench.py` | **Testing.** Loads weights and runs inference interactively. | Streamlit |
+| `app/testbench.py` | Full testing bench — every branch, every knob, Wald metrics. | Streamlit |
+
+### Upload and super-resolve (the "try it on my image" demo)
+
+```bash
+.venv/bin/python -m streamlit run app/superresolve.py
+```
+
+Upload a 4-band Sentinel-2 GeoTIFF (or pick a sample), choose a window, press
+**Super-resolve**. You get the swipe comparison, a confidence overlay, sensor-
+consistency numbers, and a download button for the 2.5 m GeoTIFF.
+
+Integer L2A values are detected and scaled automatically. Large scenes are
+windowed to keep it interactive — a 384×384 window super-resolves in about half
+a second on Apple Silicon.
 
 ### The judge demo (use this in the room)
 
