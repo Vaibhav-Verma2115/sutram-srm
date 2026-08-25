@@ -15,3 +15,6 @@ checkpoints/
 models/
 !docs/*.pdf
 data/raw/jp2_test/
+*copy*.pdf
+checkpoints_multi/
+data/raw/jp2_test/
