@@ -70,6 +70,19 @@ def probe(payload) -> dict:
                 "crs": src.crs, "transform": src.transform, "dtype": src.dtypes[0]}
 
 
+def overview(payload, size: int = 320) -> np.ndarray:
+    """Decode a heavily decimated thumbnail of a whole raster.
+
+    JPEG-2000 stores reduced-resolution levels, so rasterio can serve this from
+    a low level rather than decompressing 10980x10980 -- cheap enough to show
+    the user where the data actually is before they choose a window. Without
+    it the position sliders are blind, and a granule's nodata border (which can
+    be most of the tile) looks identical to a bug.
+    """
+    with _open(payload) as src:
+        return src.read(1, out_shape=(size, size)).astype(np.float32)
+
+
 def _read(src, window=None) -> np.ndarray:
     """Read band 1, optionally only a window, as float32."""
     if window is None:

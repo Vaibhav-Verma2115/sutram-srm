@@ -29,7 +29,7 @@ import rasterio  # noqa: E402
 import torch  # noqa: E402
 from PIL import Image  # noqa: E402
 
-from srm.io.loaders import load_band_files, load_scene, probe  # noqa: E402
+from srm.io.loaders import load_band_files, load_scene, overview, probe  # noqa: E402
 from srm.io.raster import sr_profile, write_cog  # noqa: E402
 from srm.preprocess.prepare import apply_cloud_mask  # noqa: E402
 from srm.trust.layer import confidence_map  # noqa: E402
@@ -190,8 +190,8 @@ with left:
                            f"({fw*10/1000:.1f} × {fh*10/1000:.1f} km), `{meta['crs']}`")
 
                 if max(fh, fw) > MAX_INPUT_PX:
-                    st.caption(f"Full granule — choosing a {MAX_INPUT_PX} px window keeps "
-                               "this interactive. Only the selected region is decoded.")
+                    st.caption(f"Full granule — pick a {MAX_INPUT_PX} px window below. "
+                               "Only the selected region is decoded.")
                     size = st.slider("Window size (px)", 128,
                                      min(max(fh, fw), MAX_INPUT_PX),
                                      min(384, MAX_INPUT_PX), step=64, key="bw_size")
@@ -200,6 +200,23 @@ with left:
                     x = st.slider("Horizontal position", 0, max(fw - size, 0),
                                   max(fw - size, 0) // 2, step=32, key="bw_x")
                     win = (y, x, size)
+
+                    # Show the whole granule with the window marked. A blind
+                    # slider over a tile that is largely nodata sends people
+                    # straight into an empty region and looks like a broken model.
+                    ov = overview(files["B04"], 320)
+                    thumb = np.stack([ov] * 3, axis=-1)
+                    lo, hi = np.percentile(ov[ov > 0], [2, 98]) if (ov > 0).any() else (0, 1)
+                    thumb = np.clip((thumb - lo) / max(hi - lo, 1e-8), 0, 1)
+                    ry0, ry1 = int(y / fh * 320), int(min((y + size) / fh * 320, 319))
+                    rx0, rx1 = int(x / fw * 320), int(min((x + size) / fw * 320, 319))
+                    ry1, rx1 = max(ry1, ry0 + 2), max(rx1, rx0 + 2)
+                    for cy, cx in ((ry0, slice(rx0, rx1)), (ry1, slice(rx0, rx1))):
+                        thumb[cy, cx] = [1, 0.2, 0.2]
+                    for cy, cx in ((slice(ry0, ry1), rx0), (slice(ry0, ry1), rx1)):
+                        thumb[cy, cx] = [1, 0.2, 0.2]
+                    st.image(thumb, caption="Whole granule — red box is your window. "
+                             "Black areas contain no data.", width=340)
                 else:
                     win = None
 
@@ -207,6 +224,18 @@ with left:
                     arr, profile = load_band_files(files, window=win)
                 name = "scene"
                 windowed = win is not None
+
+                # A window over nodata produces a black preview and a garbage
+                # super-resolution -- say so instead of letting it look broken.
+                nz = float((arr > 0).mean())
+                if nz < 0.02:
+                    st.error("This window is empty — it contains almost no data "
+                             f"({nz:.1%} non-zero). Move the red box over an area with "
+                             "imagery in the granule overview above.")
+                    arr = None
+                elif nz < 0.5:
+                    st.warning(f"Only {nz:.0%} of this window contains data — it overlaps "
+                               "the granule's nodata border. Results there will be poor.")
             except ValueError as exc:
                 st.error(str(exc))
             except Exception as exc:
