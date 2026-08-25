@@ -18,16 +18,31 @@ The examples below use the prefix form so they work in a fresh terminal.
 
 ---
 
-## 1. Two apps — pick the right one
+## 1. Three interfaces — pick the right one
 
-| App | Purpose | Runs models? |
-|-----|---------|--------------|
-| `app/demo.py` | **Presentation.** Reads precomputed files only, so it cannot fail live. | No |
-| `app/testbench.py` | **Testing.** Loads weights and runs inference interactively. | Yes |
+| Interface | Purpose | Needs a server? |
+|-----------|---------|-----------------|
+| **`docs/judge_demo.html`** | **Judges / presentation.** Swipe slider, 4 scenes, confidence overlay. Fully self-contained. | **No — just open it** |
+| `app/demo.py` | Product browser. Reads precomputed GeoTIFFs, four analysis tabs. | Streamlit |
+| `app/testbench.py` | **Testing.** Loads weights and runs inference interactively. | Streamlit |
+
+### The judge demo (use this in the room)
+
+```bash
+open docs/judge_demo.html
+```
+
+One 1.9 MB file, no server, no Python, no network. Works on any laptop, offline.
+
+- **Drag the slider** across the image, or use <kbd>←</kbd> <kbd>→</kbd>
+- **<kbd>1</kbd>–<kbd>4</kbd>** switch scenes (village, settlement, fields, farmland)
+- **<kbd>C</kbd>** toggles the confidence overlay — red marks where the model is least sure
+
+Rebuild it after retraining with `python scripts/make_judge_demo.py`.
 
 ```bash
 .venv/bin/python -m streamlit run app/testbench.py   # test the model
-.venv/bin/python -m streamlit run app/demo.py        # show the result
+.venv/bin/python -m streamlit run app/demo.py        # browse products
 ```
 
 ### Test bench
