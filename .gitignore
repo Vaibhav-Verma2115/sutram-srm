@@ -14,3 +14,4 @@ checkpoints/
 .ipynb_checkpoints/
 models/
 !docs/*.pdf
+data/raw/jp2_test/

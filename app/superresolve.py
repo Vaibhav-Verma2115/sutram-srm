@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import io
 import pathlib
+import re
 import sys
 import time
 import warnings
@@ -28,6 +29,7 @@ import rasterio  # noqa: E402
 import torch  # noqa: E402
 from PIL import Image  # noqa: E402
 
+from srm.io.loaders import load_scene  # noqa: E402
 from srm.io.raster import sr_profile, write_cog  # noqa: E402
 from srm.preprocess.prepare import apply_cloud_mask  # noqa: E402
 from srm.trust.layer import confidence_map  # noqa: E402
@@ -132,7 +134,8 @@ def pick_device() -> str:
 
 st.title("Sentinel-2 Super-Resolution")
 st.caption("Upload a 10 m Sentinel-2 scene and get a 2.5 m product with a per-pixel "
-           "confidence band. Bands must be **B04, B03, B02, B08** (red, green, blue, NIR).")
+           "confidence band. Accepts a 4-band **GeoTIFF**, or the individual "
+           "**JP2 band files** straight out of a SAFE product.")
 
 left, right = st.columns([1, 1.25])
 
@@ -142,15 +145,28 @@ with left:
     arr = profile = None
     name = ""
     if src == "Upload my own":
-        up = st.file_uploader("Sentinel-2 GeoTIFF (4 bands)", type=["tif", "tiff"])
-        if up:
+        ups = st.file_uploader(
+            "Sentinel-2 imagery", type=["tif", "tiff", "jp2"], accept_multiple_files=True,
+            help="Either one 4-band GeoTIFF, or the four 10 m JP2 band files from a "
+                 "SAFE product (B04, B03, B02, B08) — select them all at once.")
+        with st.expander("Where do I find these files?"):
+            st.markdown(
+                "In a downloaded **SAFE** product, the bands live under\n\n"
+                "`GRANULE/L2A_.../IMG_DATA/R10m/`\n\n"
+                "Select the four files ending **`_B04_10m.jp2`**, **`_B03_10m.jp2`**, "
+                "**`_B02_10m.jp2`** and **`_B08_10m.jp2`**. The band is read from the "
+                "filename, so keep the original names.")
+        if ups:
             try:
-                with rasterio.open(io.BytesIO(up.read())) as s:
-                    arr = s.read().astype(np.float32)
-                    profile = s.profile.copy()
-                name = pathlib.Path(up.name).stem
+                arr, profile, desc = load_scene(ups)
+                name = pathlib.Path(ups[0].name).stem
+                if len(ups) > 1:
+                    name = re.sub(r"_B0?[2348].*$", "", name) or "scene"
+                st.success(f"Loaded — {desc}")
+            except ValueError as exc:
+                st.error(str(exc))
             except Exception as exc:
-                st.error(f"Could not read that file — {type(exc).__name__}: {exc}")
+                st.error(f"Could not read those files — {type(exc).__name__}: {exc}")
     else:
         samples = sorted((ROOT / "data" / "raw").glob("*.tif"))
         samples = [p for p in samples if "SCL" not in p.name]
@@ -163,8 +179,7 @@ with left:
 
     if arr is not None:
         if arr.shape[0] != 4:
-            st.error(f"Expected 4 bands, found {arr.shape[0]}. "
-                     "The file must contain B04, B03, B02, B08 in that order.")
+            st.error(f"Expected 4 bands, found {arr.shape[0]}.")
             arr = None
         else:
             # L2A ships integer DN scaled by 10000; detect and convert.

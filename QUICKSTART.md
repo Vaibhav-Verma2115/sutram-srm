@@ -33,9 +33,19 @@ The examples below use the prefix form so they work in a fresh terminal.
 .venv/bin/python -m streamlit run app/superresolve.py
 ```
 
-Upload a 4-band Sentinel-2 GeoTIFF (or pick a sample), choose a window, press
-**Super-resolve**. You get the swipe comparison, a confidence overlay, sensor-
-consistency numbers, and a download button for the 2.5 m GeoTIFF.
+Upload your imagery (or pick a sample), choose a window, press **Super-resolve**.
+You get the swipe comparison, a confidence overlay, sensor-consistency numbers,
+and a download button for the 2.5 m GeoTIFF.
+
+**Accepted input:**
+
+| Format | How |
+|--------|-----|
+| 4-band GeoTIFF | One file, bands in B04/B03/B02/B08 order |
+| **Sentinel-2 JP2** | Select all four `_B04_10m.jp2`, `_B03_10m.jp2`, `_B02_10m.jp2`, `_B08_10m.jp2` files together — straight out of a SAFE product's `GRANULE/.../IMG_DATA/R10m/` folder |
+
+Bands are matched from the filename, so keep the original names. `B8A` is
+correctly ignored (it is the 20 m red-edge band, not the 10 m NIR).
 
 Integer L2A values are detected and scaled automatically. Large scenes are
 windowed to keep it interactive — a 384×384 window super-resolves in about half
