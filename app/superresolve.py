@@ -29,7 +29,7 @@ import rasterio  # noqa: E402
 import torch  # noqa: E402
 from PIL import Image  # noqa: E402
 
-from srm.io.loaders import load_band_files, load_scene  # noqa: E402
+from srm.io.loaders import load_band_files, load_scene, probe  # noqa: E402
 from srm.io.raster import sr_profile, write_cog  # noqa: E402
 from srm.preprocess.prepare import apply_cloud_mask  # noqa: E402
 from srm.trust.layer import confidence_map  # noqa: E402
@@ -145,6 +145,7 @@ with left:
 
     arr = profile = None
     name = ""
+    windowed = False
 
     if src == "Upload band files":
         st.caption("One file per band. The slot decides which band it is, so filenames "
@@ -180,9 +181,32 @@ with left:
             st.warning(f"{got} of 4 bands loaded — still need {', '.join(missing)}.")
         else:
             try:
-                arr, profile = load_band_files(files)
+                # Probe metadata before decoding anything. A real Sentinel-2 10 m
+                # band is 10980x10980; decoding four of them in full is ~2 GB and
+                # minutes of JPEG-2000 work, so we window first and decode second.
+                meta = probe(files["B04"])
+                fh, fw = meta["height"], meta["width"]
+                st.success(f"All four bands loaded — {fw} × {fh} px at 10 m "
+                           f"({fw*10/1000:.1f} × {fh*10/1000:.1f} km), `{meta['crs']}`")
+
+                if max(fh, fw) > MAX_INPUT_PX:
+                    st.caption(f"Full granule — choosing a {MAX_INPUT_PX} px window keeps "
+                               "this interactive. Only the selected region is decoded.")
+                    size = st.slider("Window size (px)", 128,
+                                     min(max(fh, fw), MAX_INPUT_PX),
+                                     min(384, MAX_INPUT_PX), step=64, key="bw_size")
+                    y = st.slider("Vertical position", 0, max(fh - size, 0),
+                                  max(fh - size, 0) // 2, step=32, key="bw_y")
+                    x = st.slider("Horizontal position", 0, max(fw - size, 0),
+                                  max(fw - size, 0) // 2, step=32, key="bw_x")
+                    win = (y, x, size)
+                else:
+                    win = None
+
+                with st.spinner("Decoding bands…"):
+                    arr, profile = load_band_files(files, window=win)
                 name = "scene"
-                st.success("All four bands loaded.")
+                windowed = win is not None
             except ValueError as exc:
                 st.error(str(exc))
             except Exception as exc:
@@ -228,7 +252,7 @@ with left:
         st.write(f"**{w} × {h} px** at 10 m &nbsp;·&nbsp; {w*10/1000:.1f} × {h*10/1000:.1f} km "
                  f"&nbsp;·&nbsp; `{profile.get('crs')}`")
 
-        if max(h, w) > MAX_INPUT_PX:
+        if max(h, w) > MAX_INPUT_PX and not windowed:
             st.caption(f"Large scene — a {MAX_INPUT_PX}×{MAX_INPUT_PX} window keeps this "
                        "interactive. Move the sliders to choose the area.")
             size = st.slider("Window size (px)", 128, min(max(h, w), MAX_INPUT_PX),

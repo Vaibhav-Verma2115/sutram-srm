@@ -58,38 +58,81 @@ def _open(payload) -> rasterio.DatasetReader:
     return rasterio.open(io.BytesIO(payload))
 
 
+def probe(payload) -> dict:
+    """Read a raster's metadata without decoding any pixels.
+
+    Essential for JPEG-2000: a real Sentinel-2 10 m band is 10980x10980, which
+    takes tens of seconds to decompress and ~0.5 GB as float32. Probing first
+    lets the caller choose a window before paying that cost.
+    """
+    with _open(payload) as src:
+        return {"width": src.width, "height": src.height, "count": src.count,
+                "crs": src.crs, "transform": src.transform, "dtype": src.dtypes[0]}
+
+
+def _read(src, window=None) -> np.ndarray:
+    """Read band 1, optionally only a window, as float32."""
+    if window is None:
+        return src.read(1).astype(np.float32)
+    from rasterio.windows import Window
+    row, col, size = window
+    row = max(0, min(row, src.height - 1))
+    col = max(0, min(col, src.width - 1))
+    h = min(size, src.height - row)
+    w = min(size, src.width - col)
+    return src.read(1, window=Window(col, row, w, h)).astype(np.float32)
+
+
 def load_single(payload) -> tuple[np.ndarray, dict]:
     """Load one multi-band raster (GeoTIFF or multi-band JP2)."""
     with _open(payload) as src:
         return src.read().astype(np.float32), src.profile.copy()
 
 
-def load_band_files(files: dict[str, object]) -> tuple[np.ndarray, dict]:
+def load_band_files(
+    files: dict[str, object],
+    window: tuple[int, int, int] | None = None,
+) -> tuple[np.ndarray, dict]:
     """Assemble single-band files into a stack in MODEL_ORDER.
 
-    `files` maps band name -> bytes or path. Raises ValueError naming exactly
-    which bands are missing, because "expected 4 bands, got 3" is useless to
-    someone staring at a folder of twelve JP2s.
+    `files` maps band name -> bytes or path. `window` is (row, col, size) in
+    pixels; when given, only that region is decoded from each file. Decoding a
+    window rather than the whole band is what makes full-size Sentinel-2
+    granules usable -- 10980x10980 x4 bands is ~2 GB of float32 and tens of
+    seconds of JPEG-2000 decompression per band.
+
+    Raises ValueError naming exactly which bands are missing, because "expected
+    4 bands, got 3" is useless to someone staring at a folder of twelve JP2s.
     """
     missing = [b for b in MODEL_ORDER if b not in files]
     if missing:
         raise ValueError(f"missing band(s): {', '.join(missing)}")
 
-    bands, profile, shape = [], None, None
+    bands, profile, shape, full = [], None, None, None
     for name in MODEL_ORDER:
         with _open(files[name]) as src:
             if src.count != 1:
                 raise ValueError(f"{name}: expected a single-band file, found {src.count}")
-            arr = src.read(1).astype(np.float32)
-            if shape is None:
-                shape, profile = arr.shape, src.profile.copy()
-            elif arr.shape != shape:
+            if full is None:
+                full = (src.height, src.width)
+            elif (src.height, src.width) != full:
                 raise ValueError(
-                    f"{name} is {arr.shape[1]}x{arr.shape[0]} but the first band is "
-                    f"{shape[1]}x{shape[0]} — all four must be the 10 m bands")
+                    f"{name} is {src.width}x{src.height} but the first band is "
+                    f"{full[1]}x{full[0]} — all four must be the 10 m bands "
+                    "(B8A, B11 and B12 are 20 m and will not match)")
+            arr = _read(src, window)
+            if shape is None:
+                shape = arr.shape
+                profile = src.profile.copy()
+                if window is not None:
+                    from rasterio.windows import Window
+                    row, col, _ = window
+                    profile["transform"] = src.window_transform(
+                        Window(col, row, arr.shape[1], arr.shape[0]))
             bands.append(arr)
 
-    profile = {**profile, "count": 4, "driver": "GTiff"}
+    profile = {**profile, "count": 4, "driver": "GTiff",
+               "height": shape[0], "width": shape[1]}
     return np.stack(bands), profile
 
 
