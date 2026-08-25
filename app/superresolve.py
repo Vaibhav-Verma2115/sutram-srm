@@ -29,7 +29,7 @@ import rasterio  # noqa: E402
 import torch  # noqa: E402
 from PIL import Image  # noqa: E402
 
-from srm.io.loaders import load_scene  # noqa: E402
+from srm.io.loaders import load_band_files, load_scene  # noqa: E402
 from srm.io.raster import sr_profile, write_cog  # noqa: E402
 from srm.preprocess.prepare import apply_cloud_mask  # noqa: E402
 from srm.trust.layer import confidence_map  # noqa: E402
@@ -134,39 +134,73 @@ def pick_device() -> str:
 
 st.title("Sentinel-2 Super-Resolution")
 st.caption("Upload a 10 m Sentinel-2 scene and get a 2.5 m product with a per-pixel "
-           "confidence band. Accepts a 4-band **GeoTIFF**, or the individual "
-           "**JP2 band files** straight out of a SAFE product.")
+           "confidence band — one file per band, or a single 4-band GeoTIFF.")
 
 left, right = st.columns([1, 1.25])
 
 with left:
-    src = st.radio("Image source", ["Upload my own", "Use a sample scene"], horizontal=True)
+    src = st.radio("Image source",
+                   ["Upload band files", "Upload 4-band GeoTIFF", "Use a sample scene"],
+                   horizontal=True)
 
     arr = profile = None
     name = ""
-    if src == "Upload my own":
-        ups = st.file_uploader(
-            "Sentinel-2 imagery", type=["tif", "tiff", "jp2"], accept_multiple_files=True,
-            help="Either one 4-band GeoTIFF, or the four 10 m JP2 band files from a "
-                 "SAFE product (B04, B03, B02, B08) — select them all at once.")
-        with st.expander("Where do I find these files?"):
-            st.markdown(
-                "In a downloaded **SAFE** product, the bands live under\n\n"
-                "`GRANULE/L2A_.../IMG_DATA/R10m/`\n\n"
-                "Select the four files ending **`_B04_10m.jp2`**, **`_B03_10m.jp2`**, "
-                "**`_B02_10m.jp2`** and **`_B08_10m.jp2`**. The band is read from the "
-                "filename, so keep the original names.")
-        if ups:
+
+    if src == "Upload band files":
+        st.caption("One file per band. The slot decides which band it is, so filenames "
+                   "do not matter — accepts `.jp2` straight from a SAFE product, or `.tif`.")
+
+        # Slot order is display order (natural RGB reading), but the stack is
+        # assembled in the model's B04/B03/B02/B08 order regardless.
+        SLOTS = [
+            ("B04", "B04 — Red", "665 nm"),
+            ("B03", "B03 — Green", "560 nm"),
+            ("B02", "B02 — Blue", "490 nm"),
+            ("B08", "B08 — NIR", "842 nm · needed for NDVI"),
+        ]
+        files: dict[str, object] = {}
+        rows = [st.columns(2), st.columns(2)]
+        for i, (band, label, hint) in enumerate(SLOTS):
+            col = rows[i // 2][i % 2]
+            with col:
+                f = st.file_uploader(label, type=["jp2", "tif", "tiff"], key=f"band_{band}",
+                                     help=hint)
+                if f is not None:
+                    files[band] = f.read()
+                    st.caption(f"✓ {f.name}")
+                else:
+                    st.caption(f"· {hint}")
+
+        got = len(files)
+        if got == 0:
+            st.info("Add the four 10 m band files above. In a SAFE download they are under "
+                    "`GRANULE/L2A_.../IMG_DATA/R10m/`.")
+        elif got < 4:
+            missing = [b for b, _, _ in SLOTS if b not in files]
+            st.warning(f"{got} of 4 bands loaded — still need {', '.join(missing)}.")
+        else:
             try:
-                arr, profile, desc = load_scene(ups)
-                name = pathlib.Path(ups[0].name).stem
-                if len(ups) > 1:
-                    name = re.sub(r"_B0?[2348].*$", "", name) or "scene"
-                st.success(f"Loaded — {desc}")
+                arr, profile = load_band_files(files)
+                name = "scene"
+                st.success("All four bands loaded.")
             except ValueError as exc:
                 st.error(str(exc))
             except Exception as exc:
                 st.error(f"Could not read those files — {type(exc).__name__}: {exc}")
+
+    elif src == "Upload 4-band GeoTIFF":
+        up = st.file_uploader("4-band GeoTIFF (B04, B03, B02, B08 in that order)",
+                              type=["tif", "tiff", "jp2"])
+        if up:
+            try:
+                arr, profile, desc = load_scene([up])
+                name = pathlib.Path(up.name).stem
+                st.success(f"Loaded — {desc}")
+            except ValueError as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"Could not read that file — {type(exc).__name__}: {exc}")
+
     else:
         samples = sorted((ROOT / "data" / "raw").glob("*.tif"))
         samples = [p for p in samples if "SCL" not in p.name]
@@ -176,6 +210,8 @@ with left:
                 arr = s.read().astype(np.float32)
                 profile = s.profile.copy()
             name = pick.stem
+        else:
+            st.warning("No sample scenes in data/raw/.")
 
     if arr is not None:
         if arr.shape[0] != 4:

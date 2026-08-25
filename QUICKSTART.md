@@ -37,15 +37,17 @@ Upload your imagery (or pick a sample), choose a window, press **Super-resolve**
 You get the swipe comparison, a confidence overlay, sensor-consistency numbers,
 and a download button for the 2.5 m GeoTIFF.
 
-**Accepted input:**
+**Three input modes:**
 
-| Format | How |
-|--------|-----|
-| 4-band GeoTIFF | One file, bands in B04/B03/B02/B08 order |
-| **Sentinel-2 JP2** | Select all four `_B04_10m.jp2`, `_B03_10m.jp2`, `_B02_10m.jp2`, `_B08_10m.jp2` files together — straight out of a SAFE product's `GRANULE/.../IMG_DATA/R10m/` folder |
+| Mode | How |
+|------|-----|
+| **Upload band files** (default) | Four separate slots — **B04 Red**, **B03 Green**, **B02 Blue**, **B08 NIR**. Drop one `.jp2` or `.tif` into each. The slot decides the band, so filenames don't matter. |
+| Upload 4-band GeoTIFF | One file, bands in B04/B03/B02/B08 order |
+| Use a sample scene | Pick from `data/raw/` |
 
-Bands are matched from the filename, so keep the original names. `B8A` is
-correctly ignored (it is the 20 m red-edge band, not the 10 m NIR).
+Band files live in a SAFE download under `GRANULE/L2A_.../IMG_DATA/R10m/`. The
+app shows running progress (*"2 of 4 bands loaded — still need B02, B08"*) so
+you can see exactly what's outstanding.
 
 Integer L2A values are detected and scaled automatically. Large scenes are
 windowed to keep it interactive — a 384×384 window super-resolves in about half
