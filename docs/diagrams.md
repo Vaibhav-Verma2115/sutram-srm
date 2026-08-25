@@ -138,6 +138,35 @@ classDiagram
         <<module>>
         +tiled_predict(lr, fn, tile, overlap, scale) ndarray
     }
+    class preprocess {
+        <<module>>
+        +scl_mask(scl) ndarray
+        +apply_cloud_mask(arr, scl) tuple
+        +tile_positions(h, w) list
+        +hann_window(size, overlap) ndarray
+    }
+    class io_loaders {
+        <<module>>
+        +probe(payload) dict
+        +overview(payload, size) ndarray
+        +load_band_files(files, window) tuple
+        +load_scene(uploads) tuple
+    }
+    class io_raster {
+        <<module>>
+        +read_bands(path) tuple
+        +sr_profile(profile, scale) dict
+        +write_cog(path, arr, profile) Path
+        +check_footprint(src, dst) dict
+    }
+    class validate {
+        <<module>>
+        +degrade(hr, scale) ndarray
+        +wald_protocol(branch, image) dict
+        +consistency_check(sr, lr) dict
+        +calibration_curve(conf, err) dict
+        +evaluate_tasks(truth, cands) dict
+    }
 
     SRBranch <|-- BicubicBranch
     SRBranch <|-- Sen2SRBranch
@@ -149,6 +178,10 @@ classDiagram
     pipeline ..> trust_layer : fuses via
     Sen2SRBranch ..> tiling : uses
     OursBranch ..> tiling : uses
+    pipeline ..> io_raster : writes through
+    pipeline ..> validate : checks with
+    io_loaders ..> preprocess : feeds
+    validate ..> trust_layer : reuses PSF
 ```
 
 ---
@@ -282,43 +315,125 @@ flowchart TB
 
 ---
 
-## 6. Sequence — a single inference run
+## 6. Activity diagram — end-to-end processing
+
+Every decision point the pipeline actually makes, including the guards that
+turn silent failures into explicit messages.
 
 ```mermaid
-sequenceDiagram
-    actor U as Analyst
-    participant CLI as run_inference.py
-    participant P as pipeline.run()
-    participant B as SRBranch(es)
-    participant T as trust.confidence_map()
-    participant IO as io.raster
+flowchart TD
+    Start([User has Sentinel-2 data]) --> Mode{Input type?}
 
-    U->>CLI: --input scene.tif --branches sen2sr,ldsr
-    CLI->>IO: read_bands()
-    IO-->>CLI: array + profile (CRS, transform)
-    CLI->>P: run(lr, branches)
+    Mode -->|4 JP2 band files| Probe[probe metadata<br/>no pixel decode]
+    Mode -->|4-band GeoTIFF| ReadTif[read_bands]
+    Mode -->|Sample scene| ReadTif
 
-    loop each branch
-        P->>B: predict(lr)
-        B-->>P: Prediction(sr, sigma?)
-    end
+    Probe --> Big{Larger than<br/>640 px?}
+    Big -->|Yes| Ovw[overview thumbnail<br/>show window box]
+    Ovw --> Pick[User positions window]
+    Pick --> WinRead[decode window only]
+    Big -->|No| FullRead[decode whole raster]
+    WinRead --> Empty
+    FullRead --> Empty
+    ReadTif --> Empty
 
-    P->>T: confidence_map(sr, lr, sigma, other)
-    T->>T: PSF downsample → compare to input
-    T-->>P: {consistency, sam, disagreement, confidence}
-    P-->>CLI: predictions + trust + consistency
+    Empty{Window has<br/>data?}
+    Empty -->|under 2% non-zero| Err[/Refuse:<br/>move the window/]
+    Err --> Pick
+    Empty -->|Yes| DN
 
-    CLI->>IO: write_product() — 4 SR + sigma + confidence
-    IO->>IO: rescale transform, keep bounds
-    IO-->>CLI: COG path
-    CLI->>IO: check_footprint()
-    IO-->>CLI: ok = true, drift = 0.00 m
-    CLI-->>U: product.tif + metrics.json
+    DN{Integer L2A<br/>values?}
+    DN -->|max > 1.5| Scale[divide by 10000<br/>clip to 0-1]
+    DN -->|No| Cloud
+    Scale --> Cloud
+
+    Cloud{SCL band<br/>supplied?}
+    Cloud -->|Yes| Mask[apply_cloud_mask<br/>resample 20m to 10m<br/>zero classes 0,1,3,8,9,10]
+    Cloud -->|No| Branch
+    Mask --> Branch
+
+    Branch[/For each selected branch/]
+    Branch --> Tile{Model needs<br/>128px tiles?}
+    Tile -->|Yes| TP[tiled_predict<br/>Hann-feathered blend]
+    Tile -->|No| Direct[whole-array inference]
+    TP --> Collect
+    Direct --> Collect
+
+    Collect[Collect Predictions]
+    Collect --> Trust[confidence_map<br/>consistency · SAM<br/>disagreement · sigma]
+    Trust --> Cons[consistency_check<br/>per branch]
+    Cons --> Write[write_cog<br/>4 SR + sigma + confidence]
+    Write --> Verify{check_footprint<br/>drift = 0?}
+    Verify -->|No| Fail[/Report geolocation error/]
+    Verify -->|Yes| Out([2.5 m COG + metrics.json])
+
+    classDef guard fill:#fdf6ec,stroke:#96650d
+    classDef bad fill:#fbeaea,stroke:#b3341f
+    classDef good fill:#e6f2e9,stroke:#1d7a3e
+    class Empty,Verify,DN,Cloud,Big,Tile guard
+    class Err,Fail bad
+    class Out good
 ```
 
 ---
 
-## 7. Development roadmap (Gantt)
+## 7. Sequence — upload to download
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant App as superresolve.py
+    participant L as io.loaders
+    participant M as OursBranch
+    participant T as trust.layer
+    participant V as validate.wald
+    participant IO as io.raster
+
+    U->>App: upload B04, B03, B02, B08 (.jp2)
+    App->>L: probe(B04)
+    L-->>App: 10980×10980, EPSG:32644
+    Note over App: no pixels decoded yet
+
+    App->>L: overview(B04, 320)
+    L-->>App: thumbnail from reduced JP2 level
+    App-->>U: show granule + window box
+    U->>App: position window
+
+    App->>L: load_band_files(files, window)
+    L->>L: verify all four same size
+    L->>L: decode window per band
+    L->>L: offset affine transform
+    L-->>App: (4, 384, 384) + profile
+
+    alt window is empty
+        App-->>U: refuse — move the window
+    else has data
+        App->>App: detect DN, scale ÷10000
+        App->>M: predict(lr)
+        M->>M: tiled_predict, 128px + Hann
+        M-->>App: Prediction(sr 1536×1536)
+
+        App->>T: confidence_map(sr, lr)
+        T->>T: PSF downsample → compare to input
+        T->>T: spectral angle · ΔNDVI
+        T-->>App: confidence map [0,1]
+
+        App->>V: consistency_check(sr, lr)
+        V-->>App: MAE 0.00150, SAM 0.576°
+
+        App-->>U: swipe slider + metrics
+
+        U->>App: Download
+        App->>IO: write_cog(4 SR + sigma + confidence)
+        IO->>IO: rescale transform, keep bounds
+        IO-->>App: COG path
+        App-->>U: 2.5 m GeoTIFF
+    end
+```
+
+---
+
+## 8. Development roadmap (Gantt)
 
 ```mermaid
 gantt
