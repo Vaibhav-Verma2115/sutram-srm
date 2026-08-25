@@ -9,9 +9,13 @@ data/outputs/*
 *.tiff
 *.SAFE/
 *.zip
-checkpoints/
+checkpoints/*
+!checkpoints/best.pt
+!checkpoints/history.json
 .DS_Store
-.ipynb_checkpoints/
+.ipynb_checkpoints/*
+!checkpoints/best.pt
+!checkpoints/history.json
 models/
 !docs/*.pdf
 data/raw/jp2_test/
