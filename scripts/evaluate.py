@@ -40,6 +40,11 @@ def main() -> int:
     ap.add_argument("--reflectance", action="store_true")
     ap.add_argument("--n-samples", type=int, default=4)
     ap.add_argument("--steps", type=int, default=100)
+    ap.add_argument("--ours-ckpt", default="checkpoints/best.pt",
+                    help="checkpoint for the 'ours' branch")
+    ap.add_argument("--calibrate", default="",
+                    help="comma list of branches to build a trust-layer calibration curve "
+                         "for; default = every branch that ran")
     ap.add_argument("--out", default="data/outputs/benchmark.json")
     args = ap.parse_args()
 
@@ -60,7 +65,7 @@ def main() -> int:
         branches["SEN2SR"] = Sen2SRBranch(device=args.device)
     if "ours" in names:
         from srm.models.ours_branch import OursBranch
-        branches["Ours"] = OursBranch(device=args.device)
+        branches["Ours"] = OursBranch(ckpt=args.ours_ckpt, device=args.device)
     if "ldsr" in names:
         from srm.models.ldsr_branch import LdsrBranch
         branches["LDSR-S2"] = LdsrBranch(device=args.device, n_samples=args.n_samples,
@@ -82,18 +87,47 @@ def main() -> int:
         print(f"{name:<12}" + "".join(f"{c[2].format(m[c[0]]):>9}" for c in COLS))
 
     # Does the confidence map predict where the error actually is?
-    calib = {}
-    if "SEN2SR" in preds:
-        fid = preds["SEN2SR"]
-        other = preds.get("LDSR-S2")
-        t = confidence_map(fid.sr, lr, scale=args.scale,
-                           sigma=other.sigma if other else None,
-                           other_branch=other.sr if other else None)
-        err = np.abs(fid.sr[:, : hr.shape[1], : hr.shape[2]] - hr).mean(axis=0)
-        calib = calibration_curve(t["confidence"][: hr.shape[1], : hr.shape[2]], err)
-        print(f"\ntrust-layer calibration: corr(confidence, error) = "
-              f"{calib['confidence_error_corr']:+.4f}  (negative = confidence predicts error)")
-        for b in calib["bins"]:
+    #
+    # This used to be hardcoded to SEN2SR, so a run that benchmarked "Ours"
+    # still wrote out SEN2SR's calibration curve under the Ours filename -- the
+    # branch we actually promote was never calibrated. Every branch gets its own
+    # curve now, and `calibration` keys them by branch name.
+    which = [n.strip() for n in args.calibrate.split(",")] if args.calibrate else list(preds)
+    other = preds.get("LDSR-S2")
+    calib: dict = {}
+    for name in which:
+        if name not in preds:
+            continue
+        p_ = preds[name]
+        # Don't hand a branch its own output as the disagreement reference.
+        ref = other if (other is not None and other.name != p_.name) else None
+        t = confidence_map(p_.sr, lr, scale=args.scale,
+                           sigma=ref.sigma if ref else None,
+                           other_branch=ref.sr if ref else None)
+        err = np.abs(p_.sr[:, : hr.shape[1], : hr.shape[2]] - hr).mean(axis=0)
+        c = calibration_curve(t["confidence"][: hr.shape[1], : hr.shape[2]], err)
+
+        # Monotonicity is the actual claim, so measure it instead of eyeballing
+        # a few bins: Spearman rank correlation between bin midpoint and bin
+        # mean error, weighted by nothing -- plus how many adjacent bin pairs
+        # actually descend.
+        bins = c["bins"]
+        mids = [(b["conf_lo"] + b["conf_hi"]) / 2 for b in bins]
+        errs = [b["mean_error"] for b in bins]
+        drops = sum(1 for a, b in zip(errs, errs[1:]) if b <= a)
+        c["monotonic_bin_pairs"] = f"{drops}/{max(len(errs) - 1, 1)}"
+        c["strictly_monotonic"] = drops == len(errs) - 1
+        if len(mids) > 2:
+            r = np.corrcoef(np.argsort(np.argsort(mids)),
+                            np.argsort(np.argsort(errs)))[0, 1]
+            c["bin_spearman"] = float(r)
+        calib[name] = c
+
+        print(f"\ntrust-layer calibration [{name}]: corr(confidence, error) = "
+              f"{c['confidence_error_corr']:+.4f}  (negative = confidence predicts error)")
+        print(f"  bin-mean monotonicity: {c['monotonic_bin_pairs']} adjacent pairs descend"
+              f"{'' if c['strictly_monotonic'] else '  <- NOT strictly monotonic'}")
+        for b in bins:
             bar = "#" * max(1, int(b["mean_error"] * 4000))
             print(f"  conf {b['conf_lo']:.1f}-{b['conf_hi']:.1f}  "
                   f"n={b['n_pixels']:>7}  mean|err| {b['mean_error']:.5f} {bar}")

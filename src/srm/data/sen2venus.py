@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import io
 import pathlib
+import re
 import zipfile
 
 import numpy as np
@@ -112,3 +113,63 @@ def usable(
     if (hr == hr.flat[0]).mean() > max_flat_frac:
         return False
     return float(hr.std()) >= min_std
+
+
+# ---------------------------------------------------------------------------
+# Grouping for leak-free splits
+# ---------------------------------------------------------------------------
+# A SEN2VENuS site is a fixed grid of ground locations imaged repeatedly. In
+# KUDALIAR, 500 locations are each imaged on up to 20 dates, so splitting
+# train/val by *patch* puts the same ground on both sides and the val score
+# measures terrain memorisation rather than generalisation. The filename
+# carries the location id, so we group on it:
+#
+#     KUDALIAR_137_2020-05-13_44QKE_b2b3b4b8_10m.tif
+#              ^^^ location id       ^^^^^ MGRS tile
+#      ^^^^^^^^ site      ^^^^^^^^^^ acquisition date
+
+_NAME_RE = re.compile(
+    r"^(?P<site>.+?)_(?P<pid>\d+)_(?P<date>\d{4}-\d{2}-\d{2})_(?P<tile>[^_]+)_"
+)
+
+
+def parse_ref(ref: str) -> dict:
+    """Pull site / location id / date / MGRS tile out of a patch reference."""
+    name = ref.rsplit("/", 1)[-1]
+    m = _NAME_RE.match(name)
+    if not m:
+        raise ValueError(f"unrecognised SEN2VENuS patch name: {name!r}")
+    d = m.groupdict()
+    d["pid"] = int(d["pid"])
+    return d
+
+
+def _as_ref(row_or_ref) -> str:
+    """Accept either an index row or the LR reference string itself.
+
+    `df.apply(fn, axis=1)` hands over a row, `df[LR_COL].map(fn)` hands over the
+    cell. Both call sites are natural, so support both.
+    """
+    if isinstance(row_or_ref, str):
+        return row_or_ref
+    return row_or_ref[LR_COL]
+
+
+def location_group(row_or_ref) -> str:
+    """Ground-location key: everything at this key is the same patch of Earth.
+
+    This is the correct grouping for a train/val split. Splitting on the
+    acquisition instead would still leak, because every location recurs across
+    dates and the model would be validated on terrain it had already seen.
+
+    The MGRS tile is part of the key because location ids restart per tile:
+    KUDALIAR spans 44QKE and 44QKF, each numbering its patches from 0.
+    """
+    p = parse_ref(_as_ref(row_or_ref))
+    return f"{p['site']}/{p['tile']}/{p['pid']:05d}"
+
+
+def acquisition_group(row_or_ref) -> str:
+    """Acquisition key (site + date + tile) -- one satellite overpass."""
+    p = parse_ref(_as_ref(row_or_ref))
+    return f"{p['site']}/{p['tile']}/{p['date']}"

@@ -86,8 +86,23 @@ def hann_window(size: int, overlap: int) -> np.ndarray:
 
     Ramps up over `overlap` pixels at each edge and stays 1.0 in the middle,
     so overlapping predictions cross-fade instead of producing seam lines.
+
+    The ramp is strictly positive. `np.hanning(2*overlap)` starts at exactly
+    0.0, and that zero was silently destroying data: tiled_predict normalises
+    by the accumulated weight, so a pixel whose only contribution carries
+    weight 0 came out as 0 rather than as the prediction. Every product this
+    pipeline wrote had a blacked-out first row and first column, and every
+    benchmark that ran through tiling paid for it -- 4.5 dB on a 128 px output,
+    where that ring is 1.6% of the pixels at full reflectance magnitude.
+
+    Dropping the endpoint keeps the cross-fade shape and guarantees that a
+    pixel covered by exactly one tile reconstructs that tile exactly.
     """
-    ramp = np.hanning(overlap * 2)[:overlap]
+    # A floor as well as the dropped endpoint: tiled_predict divides by the
+    # accumulated weight with a 1e-8 guard, and the squared corner weight of a
+    # bare Hann ramp lands within an order of magnitude of that guard, so the
+    # division loses precision exactly where the taper is thinnest.
+    ramp = np.maximum(np.hanning(overlap * 2 + 2)[1 : overlap + 1], 1e-3)
     w = np.ones(size, dtype=np.float32)
     w[:overlap] = ramp
     w[-overlap:] = ramp[::-1]

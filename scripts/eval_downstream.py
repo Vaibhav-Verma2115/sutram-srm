@@ -34,6 +34,8 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=100, help="validation patches to use")
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--tol", type=int, default=2, help="edge match tolerance (px)")
+    ap.add_argument("--ours-ckpt", default="checkpoints/best.pt",
+                    help="checkpoint for the 'ours' branch")
     ap.add_argument("--out", default="data/outputs/downstream.json")
     args = ap.parse_args()
 
@@ -47,7 +49,7 @@ def main() -> int:
         branches["SEN2SR"] = Sen2SRBranch(device=args.device)
     if "ours" in names:
         from srm.models.ours_branch import OursBranch
-        branches["Ours"] = OursBranch(device=args.device)
+        branches["Ours"] = OursBranch(ckpt=args.ours_ckpt, device=args.device)
 
     ds = Sen2VenusShards(args.data, "val", augment=False)
     n = min(args.n, len(ds))

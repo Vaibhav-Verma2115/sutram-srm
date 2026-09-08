@@ -79,6 +79,28 @@ class SRLoss(torch.nn.Module):
     Defaults put most mass on reconstruction, with consistency weighted heavily
     enough to matter (it is a hard physical requirement, not a nicety) and the
     spectral and gradient terms as shaping penalties.
+
+    On w_consistency: it was 0.5, and at that value the term was decorative.
+    Measured over the v2 run's final epoch, the weighted contributions were
+
+        L1 61.5%   SAM 29.0%   gradient 6.7%   consistency 2.8%
+
+    so the one term that encodes the physics -- and the one the trust layer
+    checks at inference -- supplied 3% of the gradient.
+
+    That looked like a bug, and it was measured rather than assumed. The sweep
+    (scripts/ablate.py, data/outputs/ablation_consistency.json, scored on the
+    held-out S2->S2 set) says otherwise:
+
+        w      S2->S2 SSIM   S2->S2 SAM
+        0        0.8995        2.530     <- the term does matter
+        0.5      0.9042        2.458     <- shipped value, already saturated
+        5        0.9042        2.504
+        10       0.9044        2.488
+
+    The term is load-bearing (dropping it costs SSIM and spectral accuracy) but
+    saturates by 0.5, and its small share of the loss reflects how quickly it is
+    satisfied, not that it is ignored. The default therefore stays at 0.5.
     """
 
     def __init__(
