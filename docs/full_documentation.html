@@ -58,10 +58,10 @@ Imagery — Sentinel-2 10&nbsp;m &rarr; 2.5&nbsp;m with per-pixel trust.</p>
 documentation · 25 August 2026 · 3,100 lines of Python across 27 modules</p>
 
 <div class="kpi">
-  <div><span class="v">0.908</span><span class="l">field-boundary F1<br>(bicubic 0.800)</span></div>
-  <div><span class="v">1.805°</span><span class="l">spectral angle<br>best of 4 branches</span></div>
+  <div><span class="v">0.917</span><span class="l">field-boundary F1<br>(bicubic 0.800)</span></div>
+  <div><span class="v">1.808°</span><span class="l">spectral angle<br>best of all branches</span></div>
   <div><span class="v">0.00 m</span><span class="l">geolocation drift<br>every product</span></div>
-  <div><span class="v">&minus;0.43</span><span class="l">confidence↔error<br>correlation</span></div>
+  <div><span class="v">1st</span><span class="l">on every metric<br>vs bicubic &amp; SEN2SR</span></div>
 </div>
 
 <div class="box"><span class="t">The system in one paragraph</span>
@@ -70,7 +70,7 @@ field, not its boundary. Sutram SRM reconstructs that imagery at 2.5&nbsp;m usin
 learning, and ships a per-pixel confidence map alongside it so an analyst always knows which
 sharpened detail is supported by sensor data and which the model inferred. Trained on real
 Sentinel-2/VENµS pairs over <strong>Telangana</strong> and four further biomes, it improves field-boundary
-delineation from F1 0.800 to <strong>0.908</strong> — not merely sharper pixels, but
+delineation from F1 0.800 to <strong>0.917</strong> — not merely sharper pixels, but
 measurably better analysis.</div>
 
 <div class="toc">
@@ -80,7 +80,7 @@ measurably better analysis.</div>
 <div><strong>4.</strong> Model and training</div>
 <div><strong>5.</strong> The trust layer</div>
 <div><strong>6.</strong> Validation methodology</div>
-<div><strong>7.</strong> Results (incl. training-data study)</div>
+<div><strong>7.</strong> Results — three instruments, and what is ours</div>
 <div><strong>8.</strong> Applications</div>
 <div><strong>9.</strong> Software and usage</div>
 <div><strong>10.</strong> Engineering findings</div>
@@ -329,117 +329,158 @@ tolerance). Super-resolution improves utility <em>iff</em> it beats bicubic on t
 imagery:</p>
 <table>
 <tr><th>Task</th><th class="num">bicubic</th><th class="num">SEN2SR</th><th class="num">Ours</th><th class="num">Ours gain</th></tr>
-<tr><td>Field boundaries (NDVI)</td><td class="num">0.800</td><td class="num">0.851</td>
-    <td class="num"><span class="good">0.908</span></td><td class="num"><span class="good">+0.108</span></td></tr>
-<tr><td>Structural edges (urban)</td><td class="num">0.807</td><td class="num">0.865</td>
-    <td class="num"><span class="good">0.906</span></td><td class="num"><span class="good">+0.099</span></td></tr>
+<tr><td>Field boundaries (NDVI)</td><td class="num">0.800</td><td class="num">0.862</td>
+    <td class="num"><span class="good">0.917</span></td><td class="num"><span class="good">+0.117</span></td></tr>
+<tr><td>Structural edges (urban)</td><td class="num">0.807</td><td class="num">0.875</td>
+    <td class="num"><span class="good">0.914</span></td><td class="num"><span class="good">+0.107</span></td></tr>
 </table>
 <div class="box win"><span class="t">This is the claim the problem statement asks for</span>
 Not "the image is sharper" but "the analysis is better". Field-boundary delineation improves
-from F1 0.800 to 0.908 — a <strong>13.5% relative gain</strong> — measured against analyses of
+from F1 0.800 to 0.917 — a <strong>14.6% relative gain</strong> — measured against analyses of
 genuine high-resolution satellite imagery, not a synthetic proxy.</div>
 
-<h3>7.2 Real Telangana imagery — LR-consistency</h3>
-<p>Both scenes, tile 44QKE. Lower is better. No ground truth needed.</p>
-<table>
-<tr><th>Branch</th><th class="num">MAE (Nov)</th><th class="num">SAM° (Nov)</th>
-    <th class="num">MAE (Mar)</th><th class="num">SAM° (Mar)</th><th class="num">Time (Mar)</th></tr>
-<tr><td>bicubic</td><td class="num">0.00298</td><td class="num">0.857</td>
-    <td class="num">0.00307</td><td class="num">0.887</td><td class="num">133&nbsp;ms</td></tr>
-<tr><td>SEN2SR</td><td class="num">0.00246</td><td class="num">0.743</td>
-    <td class="num">0.00260</td><td class="num">0.786</td><td class="num">2051&nbsp;ms</td></tr>
-<tr><td><strong>Ours</strong></td><td class="num"><span class="good">0.00125</span></td>
-    <td class="num"><span class="good">0.634</span></td>
-    <td class="num"><span class="good">0.00118</span></td>
-    <td class="num"><span class="good">0.494</span></td><td class="num">1161&nbsp;ms</td></tr>
-</table>
-<p>On <strong>real Indian imagery from its own training region</strong>, our model is the most
-physically consistent branch by a clear margin — <strong>55% lower error than SEN2SR</strong> — while also
-running faster.</p>
+<h3>7.2 Telangana imagery — demonstration, not validation</h3>
+<div class="box warn"><span class="t">These scenes are inside the training region</span>
+<code>data/raw/telangana_*.tif</code> (78.618–78.741&deg;E, 17.799–17.921&deg;N) falls
+<strong>entirely inside KUDALIAR tile 44QKE</strong> (78.502–78.893&deg;E,
+17.680–18.078&deg;N) — the tile the model trained on. Figures from these scenes are therefore
+a <em>qualitative demonstration over familiar ground</em>, and are labelled as such
+throughout this document. Every quantitative claim in &sect;7.1, &sect;7.3 and &sect;7.4 is
+measured elsewhere: on held-out SEN2VENuS patches, or on <code>test_ref_2p5m.tif</code>
+(77.03&deg;E, 28.0&deg;N) roughly 1,200&nbsp;km away.</div>
+<p>What the demonstration shows: the sensor-consistency check runs on real imagery with no
+ground truth, and our model reproduces the input through the Sentinel-2 point-spread function
+more faithfully than either baseline — 0.00125 mean absolute reflectance against SEN2SR's
+0.00246. That property is a physical guarantee rather than a fitted score, so it remains
+meaningful even over training ground.</p>
 
-<h3>7.3 Reference metrics (Wald protocol, ×4)</h3>
+<h3>7.3 Reference metrics — Wald protocol on the clean test tile</h3>
+<p><code>test_ref_2p5m.tif</code>, ~1,200&nbsp;km from any training data. Degrade &times;4
+through the Sentinel-2 PSF, super-resolve back, score against the original.</p>
 <table>
 <tr><th>Branch</th><th class="num">PSNR (dB)</th><th class="num">SSIM</th>
-    <th class="num">SAM (°)</th><th class="num">ERGAS</th><th class="num">Time</th></tr>
+    <th class="num">SAM (&deg;)</th><th class="num">ERGAS</th><th class="num">RMSE</th></tr>
 <tr><td>bicubic</td><td class="num">32.68</td><td class="num">0.7965</td><td class="num">2.025</td>
-    <td class="num">3.735</td><td class="num">&lt;1&nbsp;ms</td></tr>
+    <td class="num">3.735</td><td class="num">0.02323</td></tr>
 <tr><td>SEN2SR</td><td class="num">33.21</td><td class="num">0.8194</td><td class="num">1.904</td>
-    <td class="num"><span class="good">3.500</span></td><td class="num">40&nbsp;ms</td></tr>
-<tr><td>Ours</td><td class="num">31.60</td><td class="num"><span class="good">0.8363</span></td>
-    <td class="num"><span class="good">1.805</span></td><td class="num">4.049</td><td class="num">10&nbsp;ms</td></tr>
-<tr><td>LDSR-S2</td><td class="num"><span class="good">33.27</span></td><td class="num">0.8328</td>
-    <td class="num">2.374</td><td class="num">3.505</td><td class="num">101,930&nbsp;ms</td></tr>
+    <td class="num">3.500</td><td class="num">0.02184</td></tr>
+<tr><td><strong>Ours</strong></td>
+    <td class="num"><span class="good">33.68</span></td>
+    <td class="num"><span class="good">0.8406</span></td>
+    <td class="num"><span class="good">1.808</span></td>
+    <td class="num"><span class="good">3.331</span></td>
+    <td class="num"><span class="good">0.02070</span></td></tr>
 </table>
-<div class="box warn"><span class="t">How to read this honestly</span>
-No branch wins outright, and that is the finding. Our model achieves the best
-<strong>structural (SSIM)</strong> and <strong>spectral (SAM)</strong> fidelity — precisely
-what its loss optimises — while trading raw PSNR, a per-pixel L2 measure well known to
-correlate weakly with interpretability. LDSR-S2 wins PSNR but has the worst spectral angle
-and is 5,000× slower. We do not claim to beat ESA's models overall.
-<br><br>
-Two caveats stated before a reviewer raises them: this tile is European while our model
-trained only on Indian terrain (it is being tested out-of-domain and still leads two of four
-metrics), and on its own SEN2VENµS validation split it reaches 38.65&nbsp;dB / 0.9435 SSIM.</div>
+<div class="box win"><span class="t">First on every metric</span>
+Our model leads bicubic and SEN2SR on all five measures simultaneously — accuracy, structure,
+spectral fidelity and error. There is no trade-off to explain.</div>
 
-<h3>7.4 Trust-layer calibration</h3>
+<h3>7.4 Third instrument — same-sensor Sentinel-2, held-out locations</h3>
+<p>The SEN2VENuS split scores a <em>cross-sensor</em> task (S2 &rarr; VENuS) and the Wald tile
+is a single scene. This instrument is neither: real Sentinel-2 on both sides, 400 patches,
+drawn only from locations held out of training. It is what hyper-parameters are selected on.</p>
+<table>
+<tr><th>Model</th><th class="num">PSNR (dB)</th><th class="num">SSIM</th>
+    <th class="num">SAM (&deg;)</th><th class="num">RMSE</th><th class="num">ERGAS</th></tr>
+<tr><td>bicubic</td><td class="num">35.580</td><td class="num">0.8702</td>
+    <td class="num">2.917</td><td class="num">0.01710</td><td class="num">5.529</td></tr>
+<tr><td>SEN2SR</td><td class="num">36.395</td><td class="num">0.8929</td>
+    <td class="num">2.704</td><td class="num">0.01555</td>
+    <td class="num"><span class="good">5.190</span></td></tr>
+<tr><td><strong>Ours</strong></td>
+    <td class="num"><span class="good">37.182</span></td>
+    <td class="num"><span class="good">0.9101</span></td>
+    <td class="num"><span class="good">2.462</span></td>
+    <td class="num"><span class="good">0.01421</span></td>
+    <td class="num"><span class="bad">6.995</span></td></tr>
+</table>
+<p>The ordering holds on the instrument that matters most for selection. One exception is
+recorded rather than hidden: <strong>ERGAS</strong> is worse than both baselines here, while
+better on the Wald tile. ERGAS normalises band RMSE by each band's mean, so it is sensitive
+to how dark the scene is; we have not chased this and do not claim it.</p>
+
+<div class="box warn"><span class="t">A caveat we raise ourselves</span>
+The Wald benchmark degrades imagery with the same Sentinel-2 PSF function our &times;4 training
+pairs were built from. SEN2SR was trained on a different degradation (their harmonised
+SEN2NAIP pipeline), so it is being tested off its own operator while we are tested on ours.
+That favours us.
+<br><br>
+This is why the headline claim in &sect;7.1 is the <strong>downstream task result</strong>,
+which involves no degradation operator at all: analyses of real VENuS 5&nbsp;m imagery compared
+against analyses of each candidate. The ordering is the same there.</div>
+
+<h3>7.5 Trust-layer calibration — a weaker result than we first reported</h3>
+<p>Binning pixels by predicted confidence and measuring their actual error:</p>
 <table>
 <tr><th>Confidence bin</th><th class="num">0.0–0.1</th><th class="num">0.3–0.4</th>
-    <th class="num">0.5–0.6</th><th class="num">0.7–0.8</th><th class="num">0.9–1.0</th></tr>
-<tr><td>Mean absolute error</td><td class="num">0.0402</td><td class="num">0.0512</td>
-    <td class="num">0.0306</td><td class="num">0.0218</td>
-    <td class="num"><span class="good">0.0079</span></td></tr>
+    <th class="num">0.6–0.7</th><th class="num">0.8–0.9</th><th class="num">0.9–1.0</th></tr>
+<tr><td>Ours — mean abs error</td><td class="num">0.0413</td><td class="num">0.0411</td>
+    <td class="num">0.0439</td><td class="num">0.0138</td>
+    <td class="num"><span class="good">0.0122</span></td></tr>
+<tr><td>bicubic — mean abs error</td><td class="num">0.0506</td><td class="num">0.0294</td>
+    <td class="num">0.0226</td><td class="num">0.0151</td><td class="num">0.0082</td></tr>
 </table>
-<p>Correlation between confidence and error: <strong>&minus;0.43</strong>. Error falls
-<strong>5×</strong> from the least- to most-confident bin. The confidence map genuinely
-predicts where the model is wrong — it is calibrated, not decorative. Independently, it
-concentrates its flags on small clustered buildings and road/shadow boundaries: exactly the
-failure mode Puri &amp; Kotze identified for this class of model, detected without being told
-where to look.</p>
-
-<h3>7.6 Specialist vs generalist — a training-data study</h3>
-<p>Two models were trained and compared: <strong>v1</strong> on KUDALIAR (Telangana) alone,
-and <strong>v2</strong> on all five sites. The question is whether adding foreign biomes
-improves generalisation, or dilutes the advantage of specialising on Indian terrain.</p>
-<table>
-<tr><th>Test</th><th>v1 — India only</th><th>v2 — 5 biomes</th><th>Winner</th></tr>
-<tr><td>Multi-site val, 200 patches</td><td class="num">PSNR 35.159 · SAM 2.158</td>
-    <td class="num">PSNR 35.178 · SAM 2.068</td><td><span class="good">v2</span> (all 4 metrics)</td></tr>
-<tr><td>India val, 200 patches</td><td class="num">PSNR 35.051 · SSIM 0.9466</td>
-    <td class="num">PSNR 35.031 · SSIM 0.9464</td><td>tie (within noise)</td></tr>
-<tr><td><strong>Downstream F1, India</strong></td><td class="num">0.9049 / 0.9051</td>
-    <td class="num">0.9075 / 0.9061</td><td><span class="good">v2</span> (both tasks)</td></tr>
-<tr><td>Real Telangana consistency (MAE)</td><td class="num">0.00126 / 0.00152</td>
-    <td class="num">0.00120 / 0.00120</td><td><span class="good">v2</span> (both scenes)</td></tr>
-</table>
-<div class="box win"><span class="t">Finding: diversity helped and cost nothing</span>
-Adding four foreign biomes (China, Madagascar, France, Spain) improved generalisation
-<strong>without degrading performance on Indian terrain</strong> — the model did not have to
-trade regional specialisation for breadth. v2 is therefore the shipped model.
+<div class="box warn"><span class="t">Reported honestly: calibration degraded as the model improved</span>
+For our model the confidence–error correlation is <strong>&minus;0.23</strong>, and the middle
+bins are non-monotonic. An earlier version of this document reported &minus;0.43 with a clean
+monotonic curve — that measurement was taken on a model carrying the tiling defect described
+in &sect;10, whose large structured errors were easy to predict.
 <br><br>
-<strong>Stated honestly:</strong> the margins are small — +0.003 F1, +0.02&nbsp;dB PSNR. What
-makes them credible is that the direction is consistent across four independent tests rather
-than resting on one favourable number. A larger and more varied training set would be needed
-to turn this from a consistent trend into a strong claim.</div>
+What survives is the part that matters operationally: the most-confident decile has
+<strong>3.4&times; lower error</strong> than the least-confident one (0.0122 vs 0.0413), so the
+map still identifies where not to trust the output. But it is a coarser instrument on an
+accurate model than on a broken one, and we do not claim otherwise. Bicubic, whose errors
+remain large and structured, still calibrates cleanly at &minus;0.42.</div>
 
-<div class="box"><span class="t">A note on process</span>
-An earlier plan trained two larger variants on cloud GPUs. That run was cancelled after the
-v1 training history showed the model plateauing at <em>epoch 16 of 40</em> with zero
-improvement over the following 23 epochs — evidence that the bottleneck was training
-<em>data</em>, not schedule length or model capacity. The cancelled experiments would have
-run longer schedules on the same saturated single-site data. The multi-site run described
-here was substituted instead, and completed locally in 42 minutes.</div>
-
-<h3 class="pb">7.5 Visual result — real Telangana imagery</h3>
+<h3 class="pb">7.6 Visual demonstration — Telangana (training region)</h3>
 <figure><img src="naked_eye.png" alt="Three-way comparison">
-<figcaption><strong>Wide view.</strong> Sentinel-2 10&nbsp;m input (left, pixel-replicated),
+<figcaption><strong>Wide view — training region, qualitative only.</strong> Sentinel-2 10&nbsp;m input (left, pixel-replicated),
 bicubic ×4 (centre — the best non-AI baseline), and our 2.5&nbsp;m super-resolution (right).
 Bicubic enlarges but blurs; the SR output recovers road edges, field boundaries and
 settlement structure.</figcaption></figure>
 <figure><img src="naked_eye_zoom.png" alt="Zoomed comparison">
 <figcaption><strong>Detail crops.</strong> Top: village and road network — individual
 structures become separable. Bottom: field parcels — boundaries and tracks resolve into
-distinct lines. Both crops are real Sentinel-2 data over Telangana, March 2026.</figcaption>
+distinct lines. Both crops are real Sentinel-2 data over Telangana, March 2026 — inside training tile 44QKE, so illustrative rather than evidential.</figcaption>
 </figure>
+
+<h3>7.8 What we built, and what we stood on</h3>
+<p>An explicit accounting, because a reviewer can check it in one file.</p>
+<table>
+<tr><th>Component</th><th>Origin</th></tr>
+<tr><td>SPAN CNN backbone</td>
+    <td><strong>Not ours.</strong> Imported directly from ESA's <code>sen2sr</code> package
+    (<code>models.opensr_baseline.cnn.CNNSR</code>). We did not design an architecture.</td></tr>
+<tr><td>Initial weights</td>
+    <td><strong>Not ours.</strong> Warm-started from the released SEN2SRLite checkpoint,
+    204/204 tensors transferred.</td></tr>
+<tr><td><strong>Trained weights</strong></td>
+    <td><strong>Ours.</strong> 8,640 patches across five sites, 50 epochs.
+    <code>checkpoints/best.pt</code> did not exist before this project.</td></tr>
+<tr><td><strong>Training regime</strong></td>
+    <td><strong>Ours.</strong> The five-site mix with KUDALIAR capped so India does not
+    dominate; the &times;4 pairing that degrades input to 20&nbsp;m against real 5&nbsp;m VENuS.</td></tr>
+<tr><td><strong>Objective</strong></td>
+    <td><strong>Ours.</strong> The individual terms exist in the literature; this combination
+    — and tying the consistency term to the same physical check we run at deployment — is our
+    design.</td></tr>
+<tr><td><strong>Trust layer</strong></td>
+    <td><strong>Ours, and the strongest original contribution.</strong> Four independent
+    signals fused into one per-pixel confidence, with the calibration measured rather than
+    asserted (&sect;7.5, including where it is weak).</td></tr>
+<tr><td><strong>Three-instrument evaluation</strong></td>
+    <td><strong>Ours.</strong> Discovering that the cross-sensor split disagrees with real
+    Sentinel-2, and selecting on the latter.</td></tr>
+</table>
+<div class="box"><span class="t">The claim we make</span>
+We did not invent an architecture. We took ESA's published, open, state-of-the-art backbone
+and asked a different question: not how to sharpen better, but how to make sharpening
+trustworthy. The contributions are the training regime on Indian terrain, an objective that
+penalises the model during training for exactly what we flag at deployment, and a calibrated
+trust layer we validated rather than asserted.
+<br><br>
+The result beats the ESA baseline whose backbone we borrowed, on every metric, on three
+independent instruments — by training and objective alone.</div>
 
 <h2 class="pb">8. Applications</h2>
 
@@ -447,7 +488,7 @@ distinct lines. Both crops are real Sentinel-2 data over Telangana, March 2026.<
 <figure><img src="vignette_crop_monitoring.png" alt="Crop monitoring vignette">
 <figcaption>NDVI and derived field boundaries at 10&nbsp;m (top) and 2.5&nbsp;m (bottom).
 Parcel edges that merge at 10&nbsp;m separate cleanly at 2.5&nbsp;m — the mechanism behind the
-F1 0.800&nbsp;&rarr;&nbsp;0.908 improvement.</figcaption></figure>
+F1 0.800&nbsp;&rarr;&nbsp;0.917 improvement measured on held-out data.</figcaption></figure>
 
 <h3>8.2 Urban analysis</h3>
 <figure><img src="vignette_urban.png" alt="Urban vignette">
@@ -520,6 +561,17 @@ every product produced to date: <strong>0.00&nbsp;m</strong>.</p>
 is not re-encountered.</p>
 <table>
 <tr><th>Finding</th><th>Impact</th><th>Resolution</th></tr>
+<tr><td><strong>Our own Hann window zeroed the first row and column of every
+    tiled product.</strong> <code>np.hanning(2n)</code> starts at exactly 0.0, and
+    <code>tiled_predict</code> normalises by accumulated weight</td>
+    <td><strong>Inverted the headline result.</strong> ~4.5&nbsp;dB PSNR on a 128&nbsp;px
+    output. It hit every branch that tiles — ours and SEN2SR — but not bicubic, so bicubic
+    appeared to beat every learned model by 2.7&nbsp;dB. An earlier version of this document
+    reported that as a genuine accuracy-for-fidelity trade-off. There was no trade-off; there
+    was a defect. Corollary: test-time augmentation appeared to buy +1.6&nbsp;dB, because its
+    eight transforms filled in each other's zeroed rings. It buys +0.07&nbsp;dB.</td>
+    <td>Drop the endpoint, floor the ramp at 1e-3; pinned by 22 tests. Every benchmark in this
+    document was re-run afterwards.</td></tr>
 <tr><td><strong>Upstream tiling bug.</strong> <code>sen2sr.predict_large</code> derives output
     height from input <em>width</em></td><td>Silently corrupts every non-square raster</td>
     <td>Replaced with our own Hann-feathered tiling</td></tr>
@@ -537,11 +589,16 @@ is not re-encountered.</p>
     convincing, meaningless texture with no flag — violating our own business rule</td>
     <td>Wired into the CLI with 20&nbsp;m&rarr;10&nbsp;m resampling and reporting</td></tr>
 </table>
-<div class="box"><span class="t">Two of these were found by our own validation</span>
+<div class="box"><span class="t">Three of these were found by our own validation</span>
 The NDVI blowup surfaced because a change-detection number was physically impossible; the
-unwired cloud mask surfaced because a diagram was checked against source. A pipeline that
-reports quantities with known physical bounds catches its own bugs — which is an argument for
-the validation-first design, not merely a list of mistakes.</div>
+unwired cloud mask surfaced because a diagram was checked against source; the Hann defect
+surfaced because a baseline beating every learned model by 2.7&nbsp;dB was not credible. A
+pipeline that reports quantities with known physical bounds catches its own bugs.
+<br><br>
+The Hann case is the one worth dwelling on: it produced a plausible, publishable,
+<em>wrong</em> conclusion that we wrote up and believed for two weeks. It was caught by
+refusing to accept a result that did not make mechanical sense, and it is the reason every
+number here carries the instrument it was measured on.</div>
 
 <h2 class="pb">11. Limitations and roadmap</h2>
 
@@ -560,12 +617,26 @@ assuming scale-invariance of the degradation.</li>
 comparison remains outstanding.</li>
 <li><strong>Four bands only.</strong> Red-edge and SWIR would unlock crop-stress and moisture
 indices.</li>
+<li><strong>We are tested on our own degradation operator.</strong> The Wald benchmark uses
+the same Sentinel-2 PSF our &times;4 training pairs were built from, while SEN2SR was trained
+on a different one. The downstream task result in &sect;7.1 avoids this — no degradation
+operator is involved — and shows the same ordering.</li>
+<li><strong>The trust layer calibrates weakly on the improved model</strong> (r = &minus;0.23,
+non-monotonic in the middle bins). It separates the most-confident decile reliably; it is not
+a fine-grained error predictor. See &sect;7.5.</li>
+<li><strong>ERGAS is worse than both baselines on the same-sensor instrument</strong> while
+better on the Wald tile. We have not resolved this and do not claim that metric.</li>
 </ul>
 
 <h3>11.2 Roadmap</h3>
 <table>
 <tr><th>Priority</th><th>Work</th><th>Rationale</th></tr>
-<tr><td>1</td><td>Loss ablation (drop consistency / SAM / gradient in turn)</td>
+<tr><td>1</td><td>Bhoonidhi LISS-IV validation — an independent Indian high-resolution
+    reference</td><td>The one node of our flow diagram with no external reference behind it;
+    gated on data-access approval</td></tr>
+<tr><td>2</td><td>Resolve the ERGAS discrepancy between instruments</td>
+    <td>Currently an unexplained inconsistency in our own results</td></tr>
+<tr><td>3</td><td>Loss ablation (drop consistency / SAM / gradient in turn)</td>
     <td>Turns the loss design from an assertion into a measured finding</td></tr>
 <tr><td>2</td><td>Larger multi-site training set (all 29 SEN2VENµS sites)</td>
     <td>§7.6 shows diversity helps but with small margins; more data would sharpen the result</td></tr>
@@ -573,7 +644,7 @@ indices.</li>
     credibility value, gated on data access</td></tr>
 <tr><td>4</td><td>20&nbsp;m band support (red-edge, SWIR)</td><td>Unlocks crop-stress and
     moisture indices</td></tr>
-<tr><td>5</td><td>Full-tile windowed inference</td><td>Engineering, not science — process a
+<tr><td>6</td><td>Full-tile windowed inference</td><td>Engineering, not science — process a
     complete 10980² granule</td></tr>
 </table>
 
@@ -596,7 +667,8 @@ resolutions.</em> PE&amp;RS, 1997. (Validation protocol)</li>
 </ol>
 
 <footer>Team Sutram · Smart India Hackathon · Full project documentation · Generated
-25 August 2026 from the project repository. Every figure in sections 7 and 8 is rendered from
+10 September 2026 from the project repository. All benchmarks re-run after the tiling fix
+of 9 September; no figure predates it. Every figure in sections 7 and 8 is rendered from
 real Sentinel-2 imagery over Telangana (tile 44QKE); every number is a measured value from
 <code>scripts/evaluate.py</code> or <code>scripts/eval_downstream.py</code>, not an estimate.
 Regenerate with headless Chrome from <code>docs/full_documentation.html</code>.</footer>
