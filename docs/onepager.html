@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Sutram SRM — One Page</title>
+<style>
+@page { size: A4 landscape; margin: 5mm 6mm; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;font-size:6.9pt;line-height:1.28;color:#15202b}
+.hdr{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2pt solid #16506b;padding-bottom:1.5mm;margin-bottom:2mm}
+h1{font-size:17.5pt;letter-spacing:-.4pt;line-height:1}
+h1 span{color:#16506b}
+.tag{font-size:8pt;color:#5b6b78;margin-top:.9mm}
+.kpis{display:flex;gap:2mm}
+.kpi{background:#16506b;color:#fff;border-radius:2px;padding:1.2mm 2.6mm;text-align:center;min-width:18mm}
+.kpi b{display:block;font-size:12pt;line-height:1.05}
+.kpi span{font-size:5.6pt;opacity:.86;letter-spacing:.2pt}
+.cols{display:grid;grid-template-columns:1fr 1.18fr 1fr;gap:3.2mm}
+h2{font-size:7.9pt;color:#16506b;border-bottom:.9pt solid #16506b;padding-bottom:.6mm;margin:0 0 1.4mm;text-transform:uppercase;letter-spacing:.3pt}
+h2:not(:first-child){margin-top:2mm}
+p{margin-bottom:1.1mm}
+ul{padding-left:3mm;margin-bottom:1mm}
+li{margin-bottom:.35mm}
+table{border-collapse:collapse;width:100%;font-size:6.2pt;margin-bottom:1.1mm}
+th{background:#16506b;color:#fff;text-align:left;padding:.5mm 1mm;font-weight:600}
+td{border-bottom:.3pt solid #dde4e9;padding:.45mm 1mm}
+tr:nth-child(even) td{background:#fafbfc}
+.win td{background:#e8f4ec!important;font-weight:700;color:#14532d}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.box{background:#f3f7fa;border:.3pt solid #c5d6e0;border-left:1.6pt solid #16506b;border-radius:2px;padding:1.1mm 1.7mm;margin-bottom:1.2mm}
+.box>b:first-child{color:#16506b;display:block;margin-bottom:.4mm}
+.warn{background:#fdf7ed;border-color:#e3c78d;border-left-color:#96650d}
+.warn>b:first-child{color:#96650d}
+.warn b{color:#96650d}
+.good{color:#1d7a3e;font-weight:700}
+.bad{color:#b3341f}
+img{width:100%;display:block;margin-bottom:.9mm}
+pre{font-family:"SF Mono",Menlo,monospace;font-size:5.4pt;line-height:1.24;background:#f7f9fa;border:.35pt solid #d7dee3;padding:1.2mm;white-space:pre;margin-bottom:1.6mm}
+.ft{border-top:.6pt solid #c9d3da;margin-top:1.2mm;padding-top:.8mm;font-size:5.6pt;color:#6b7885;display:flex;justify-content:space-between}
+</style></head><body>
+
+<div class="hdr">
+  <div>
+    <h1>Sutram SRM &mdash; Sentinel-2 <span>10 m &rarr; 2.5 m</span></h1>
+    <div class="tag">Deep-learning super-resolution with per-pixel trust &nbsp;·&nbsp; Team Sutram &nbsp;·&nbsp; Smart India Hackathon 2026</div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><b>0.917</b><span>FIELD-BOUNDARY F1</span></div>
+    <div class="kpi"><b>1st</b><span>ON EVERY METRIC</span></div>
+    <div class="kpi"><b>0.00 m</b><span>GEO DRIFT</span></div>
+    <div class="kpi"><b>30 ms</b><span>PER TILE</span></div>
+  </div>
+</div>
+
+<div class="cols">
+
+<!-- ================= COL 1 ================= -->
+<div>
+  <h2>The problem</h2>
+  <p>Sentinel-2 images all of India every 5 days, free, at 10&nbsp;m &mdash; enough to see a
+  field, not its boundary. Commercial sub-metre imagery costs thousands of rupees per scene.</p>
+  <p>Generative super-resolution offers a third path and introduces a new risk: <b>a model that
+  sharpens can also invent.</b> That risk, not image quality, is why SR is not already
+  operational in most agencies.</p>
+  <div class="box"><b>What we actually solve</b>
+  Not &ldquo;make images sharper&rdquo; &mdash; open models already do that. The unsolved problem
+  is making the result <b>trustworthy enough to act on</b>.</div>
+
+  <h2>Pipeline</h2>
+<pre>S2 L2A (B04 B03 B02 B08 @10m + SCL)
+  |
+ [1] SCL cloud mask -> scale -> tile 128/32
+  |
+ [2] Branches (one interface)
+      bicubic | SEN2SR | LDSR-S2 | OURS
+  |
+ [3] Trust layer
+      LR-consistency | spectral angle
+      branch spread  | sampling sigma
+        -> confidence [0,1]
+  |
+ [4] Wald protocol | consistency | calibration
+  |
+ [5] 2.5m COG: 4 bands + sigma + confidence
+  |
+ [6] NDVI | buildings | change detection</pre>
+
+  <h2>Training data</h2>
+  <table>
+  <tr><th>Site</th><th>Location</th><th class="num">Patches</th></tr>
+  <tr class="win"><td>KUDALIAR</td><td>Telangana, INDIA</td><td class="num">4,000</td></tr>
+  <tr><td>ANJI</td><td>China</td><td class="num">2,312</td></tr>
+  <tr><td>MAD-AMBO</td><td>Madagascar</td><td class="num">1,442</td></tr>
+  <tr><td>SUDOUE-4</td><td>France</td><td class="num">935</td></tr>
+  <tr><td>ESTUAMAR</td><td>Spain</td><td class="num">911</td></tr>
+  <tr><td colspan="2"><b>Train total</b></td><td class="num"><b>8,640</b></td></tr>
+  </table>
+  <p>SEN2VENuS &mdash; real <b>same-day</b> Sentinel-2/VENuS pairs. India capped at 4,000 so it
+  cannot dominate. 50 epochs, 41 min on Apple Silicon.</p>
+  <div class="box warn"><b>Scale subtlety, stated openly</b>
+  SEN2VENuS is natively &times;2 (10&rarr;5&nbsp;m). We build a &times;4 problem by degrading the
+  <i>input</i> to 20&nbsp;m through the Sentinel-2 PSF &mdash; not bicubic &mdash; while keeping
+  the <b>real</b> 5&nbsp;m target.</div>
+</div>
+
+<!-- ================= COL 2 ================= -->
+<div>
+  <h2>Results &mdash; Wald protocol, clean tile ~1200 km from training</h2>
+  <img src="charts/onepager_wald.png" alt="Wald results">
+  <table>
+  <tr><th>Branch</th><th class="num">PSNR</th><th class="num">SSIM</th><th class="num">SAM&deg;</th><th class="num">ERGAS</th><th class="num">Time</th></tr>
+  <tr><td>bicubic</td><td class="num">32.68</td><td class="num">0.7965</td><td class="num">2.025</td><td class="num">3.735</td><td class="num">&lt;1 ms</td></tr>
+  <tr><td>SEN2SR <span style="color:#6b7885">(ESA, RSE 2025)</span></td><td class="num">33.21</td><td class="num">0.8194</td><td class="num">1.904</td><td class="num">3.500</td><td class="num">40 ms</td></tr>
+  <tr><td>LDSR-S2 <span style="color:#6b7885">(JSTARS 2025)</span></td><td class="num">33.27</td><td class="num">0.8328</td><td class="num">2.370</td><td class="num">3.506</td><td class="num" style="color:#b3341f">105.6 s</td></tr>
+  <tr class="win"><td>OURS</td><td class="num">33.68</td><td class="num">0.8406</td><td class="num">1.808</td><td class="num">3.331</td><td class="num">30 ms</td></tr>
+  </table>
+
+  <h2>Results &mdash; same-sensor S2&rarr;S2, 400 held-out patches</h2>
+  <table>
+  <tr><th>Branch</th><th class="num">PSNR</th><th class="num">SSIM</th><th class="num">SAM&deg;</th><th class="num">RMSE</th></tr>
+  <tr><td>bicubic</td><td class="num">35.580</td><td class="num">0.8702</td><td class="num">2.917</td><td class="num">0.01710</td></tr>
+  <tr><td>SEN2SR</td><td class="num">36.395</td><td class="num">0.8929</td><td class="num">2.704</td><td class="num">0.01555</td></tr>
+  <tr class="win"><td>OURS</td><td class="num">37.182</td><td class="num">0.9101</td><td class="num">2.462</td><td class="num">0.01421</td></tr>
+  </table>
+
+  <h2>The claim that matters &mdash; does the analysis improve?</h2>
+  <img src="charts/onepager_down.png" alt="Downstream utility">
+  <div class="box"><b>Not &ldquo;sharper&rdquo; &mdash; &ldquo;better analysis&rdquo;</b>
+  Field-boundary delineation <b>0.800 &rarr; 0.917</b> (<span class="good">+14.7%</span>),
+  structural edges <b>0.807 &rarr; 0.914</b> (<span class="good">+13.3%</span>), measured against
+  analyses of <b>real VENuS 5&nbsp;m imagery</b> &mdash; no degradation operator involved.</div>
+</div>
+
+<!-- ================= COL 3 ================= -->
+<div>
+  <h2>Feature comparison</h2>
+  <table>
+  <tr><th>Capability</th><th>SEN2SR</th><th>LDSR</th><th>Ours</th></tr>
+  <tr><td>Per-pixel uncertainty</td><td>no</td><td>sigma</td><td><b>4-signal</b></td></tr>
+  <tr class="win"><td>Calibration validated</td><td>no</td><td>no</td><td>YES</td></tr>
+  <tr><td>Spectral angle optimised</td><td>no</td><td>no</td><td><b>yes</b></td></tr>
+  <tr><td>Interactive speed</td><td>yes</td><td class="bad">no</td><td><b>yes</b></td></tr>
+  <tr><td>Cloud masking built in</td><td>no</td><td>no</td><td><b>yes</b></td></tr>
+  <tr><td>Footprint verified</td><td>no</td><td>no</td><td><b>0.00 m</b></td></tr>
+  <tr class="win"><td>Downstream task eval</td><td>no</td><td>no</td><td>YES</td></tr>
+  <tr><td>Indian training data</td><td class="bad">none</td><td class="bad">none</td><td><b>4,000</b></td></tr>
+  </table>
+
+  <h2>Applications</h2>
+  <ul>
+  <li><b>Agriculture</b> &mdash; plot-level crop health, sowing dates, PM-FBY insurance
+  verification. Field boundaries <b>+14.7%</b>; NDVI preserved to <b>0.4%</b>.</li>
+  <li><b>Urban planning</b> &mdash; sprawl monitoring, unauthorised construction, road updating.
+  Structural edges <b>+13.3%</b>.</li>
+  <li><b>Disaster assessment</b> &mdash; flood extent, crop loss, landslides. Two-date change
+  signal preserved to <b>0.4%</b> while boundaries sharpen.</li>
+  </ul>
+
+  <h2>What we built, what we stood on</h2>
+  <table>
+  <tr><th>Component</th><th>Origin</th></tr>
+  <tr><td>SPAN backbone</td><td class="bad">ESA's, not ours</td></tr>
+  <tr><td>Initial weights</td><td class="bad">SEN2SRLite</td></tr>
+  <tr class="win"><td>Trained weights</td><td>OURS</td></tr>
+  <tr class="win"><td>Training regime</td><td>OURS</td></tr>
+  <tr class="win"><td>Loss function</td><td>OURS</td></tr>
+  <tr class="win"><td>Trust layer</td><td>OURS</td></tr>
+  </table>
+  <p>We did not invent an architecture. We asked a different question &mdash; not how to sharpen
+  better, but how to make sharpening trustworthy. <b>The result beats the ESA baseline whose
+  backbone we borrowed, by training and objective alone.</b></p>
+
+  <h2>Caveats we raise ourselves</h2>
+  <div class="box warn">
+  <b>Tested on our own degradation operator.</b> The Wald benchmark uses the same S2 PSF our training
+  pairs were built from; SEN2SR was not. The downstream result avoids this.<br>
+  <b>Telangana scenes are training ground</b> (tile 44QKE) &mdash; demonstration only, never a
+  quantitative claim.<br>
+  <b>Calibration is weak</b> (r = &minus;0.23): top decile has 3.4&times; lower error, but it is not
+  a fine-grained predictor.<br>
+  <b>ERGAS worse on one instrument.</b> Unresolved; not claimed.
+  </div>
+  <div class="box"><b>We found our own biggest error</b>
+  A Hann-window bug zeroed the first row/column of every tiled output &mdash; 4.5&nbsp;dB, making
+  bicubic appear to beat every learned model. We published that for two weeks. Caught by refusing a
+  result that made no mechanical sense; every number here was re-measured after.</div>
+</div>
+</div>
+
+<div class="ft">
+  <span><b>github.com/Vaibhav-Verma2115/sutram-srm</b> &nbsp;·&nbsp; 8,640 training patches &nbsp;·&nbsp; 3,100 lines Python &nbsp;·&nbsp; 22 tests passing</span>
+  <span>All figures from real Sentinel-2 over Telangana (44QKE) &nbsp;·&nbsp; every number measured, none estimated</span>
+</div>
+</body></html>
